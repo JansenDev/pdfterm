@@ -35,8 +35,10 @@ Los comandos se escriben y se confirman con Enter:
 
 | Tecla     | Acción                                       |
 |-----------|----------------------------------------------|
-| `Enter`   | Página siguiente                             |
+| `Enter`   | Avanza una pantalla; al final de la página, pasa a la siguiente |
+| `b`       | Retrocede una pantalla                       |
 | `p`       | Página anterior                              |
+| `g`       | Vuelve al principio de la página             |
 | `61`      | Ir a esa página                              |
 | `/texto`  | Buscar y listar las páginas con coincidencia |
 | `i`       | Ver la página actual como imagen             |

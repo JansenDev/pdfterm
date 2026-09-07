@@ -3,6 +3,28 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.1.0] - 2026-09-07
+
+### Corregido
+
+- El texto empezaba por la mitad cuando la página no cabía entera en la
+  pantalla: al imprimirla de una vez, el terminal desplazaba solo y dejaba
+  el principio fuera de vista. Ahora el programa pagina por su cuenta y
+  nunca imprime más líneas de las que caben.
+
+### Añadido
+
+- Desplazamiento dentro de la página: `Enter` avanza una pantalla y salta a
+  la página siguiente al llegar al final, `b` retrocede una pantalla y `g`
+  vuelve al principio de la página.
+- Indicador de pantalla actual en la cabecera cuando la página ocupa más de
+  una (`pantalla 2/3`).
+
+### Cambiado
+
+- Cambiar de página, saltar a una página concreta o modificar cualquier
+  ajuste de formato devuelve la vista al principio de la página.
+
 ## [1.0.0] - 2026-09-07
 
 Primera versión.
