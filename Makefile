@@ -1,5 +1,5 @@
 PREFIX ?= $(HOME)/.local
-VERSION = 1.0.0
+VERSION = $(shell cat VERSION)
 
 .PHONY: install uninstall deb clean
 
@@ -13,6 +13,7 @@ uninstall:
 
 deb:
 	install -m 755 pdfterm debian/usr/bin/pdfterm
+	sed -i "s/^Version: .*/Version: $(VERSION)/" debian/DEBIAN/control
 	dpkg-deb --root-owner-group --build debian pdfterm_$(VERSION)_all.deb
 	@echo "Paquete generado: pdfterm_$(VERSION)_all.deb"
 
