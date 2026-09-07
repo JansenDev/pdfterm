@@ -7,6 +7,7 @@ dependencias de lenguaje: todo el trabajo lo hacen `pdftotext`, `awk` y `fmt`.
 
     pdfterm            el programa entero (un solo script)
     install.sh         instalador multiplataforma (apt, dnf, pacman, zypper, brew)
+    INSTALL.md         instalación detallada y resolución de problemas
     uninstall.sh       desinstalador, con --purge para config y caché
     Makefile           install / uninstall / deb / clean
     debian/DEBIAN/     control del paquete .deb
