@@ -13,6 +13,15 @@ formateado, sin salir de la consola.
 
 ## Instalación
 
+### Desde el repositorio
+
+    git clone https://github.com/JansenDev/pdfterm.git
+    cd pdfterm && ./install.sh
+
+Para actualizar más adelante:
+
+    git pull && ./install.sh
+
 ### Con el paquete .deb (Debian, Ubuntu, WSL)
 
 Resuelve las dependencias automáticamente:
@@ -75,6 +84,12 @@ no maneja UTF-8, así que romperían los acentos.
     ~/.local/bin/pdfterm          el programa
     ~/.config/pdfterm/config      ajustes
     ~/.local/share/pdfterm/       caché: posición de lectura y cabeceras por libro
+
+## Versionado
+
+El proyecto sigue versionado semántico. La versión vive en el fichero `VERSION`,
+de donde la leen el `Makefile` y el control del paquete. Los cambios de cada
+versión están en `CHANGELOG.md`.
 
 ## Desinstalar
 
