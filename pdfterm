@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# pdfterm — lector de PDF en la terminal, con formato de lectura ajustable.
+set -uo pipefail
+
+CACHE="$HOME/.local/share/pdfterm"; CONF="$HOME/.config/pdfterm"
+mkdir -p "$CACHE" "$CONF"; RCF="$CONF/config"
+
+# --- Preferencias de lectura (se guardan en ~/.config/pdfterm/config) --------
+ANCHO=64          # ancho de la columna de texto, en caracteres
+INTER=1           # líneas en blanco entre renglones
+PARRAFO=3         # líneas en blanco entre párrafos (total, no extra)
+NUM=1             # numerar los renglones a la izquierda
+TEMA=suave        # suave | sepia | normal | propio
+CABECERA=completa # completa | compacta | minima | oculta
+COLOR_TEXTO=252   # solo si TEMA=propio
+COLOR_TITULO=117
+COLOR_NUM=240
+[ -f "$RCF" ] && . "$RCF"
+
+guardar_conf() {
+  cat > "$RCF" <<EOF
+# Configuración de pdfterm. Se puede editar a mano; también se actualiza
+# sola cuando cambias algo con las teclas dentro del lector.
+# Para abrirla rápido:  pdfterm --config
+
+# ---- Formato del texto -----------------------------------------------------
+
+# Ancho de la columna de texto, en caracteres. Entre 40 y 120.
+# Cuanto más estrecha, más cómoda de leer; 60-70 es lo habitual en un libro.
+ANCHO=$ANCHO
+
+# Líneas en blanco entre renglón y renglón (el interlineado).
+# 0 = compacto, 1 = espaciado, 2-3 = muy aireado.
+INTER=$INTER
+
+# Líneas en blanco entre un párrafo y el siguiente. Es el total, no un extra
+# sobre INTER. Ponlo mayor que INTER para que los párrafos se distingan.
+PARRAFO=$PARRAFO
+
+# Numeración de renglones en el margen izquierdo. 1 = sí, 0 = no.
+# Los números se reinician en cada página.
+NUM=$NUM
+
+# ---- Aspecto ---------------------------------------------------------------
+
+# Barra superior:
+#   completa  nombre del libro entero + línea de ajustes debajo
+#   compacta  todo en una línea, con el nombre recortado
+#   minima    solo nombre y número de página
+#   oculta    sin barra, únicamente el texto
+CABECERA=$CABECERA
+
+# Colores: suave (gris claro), sepia (cálido, tipo papel),
+# normal (sin color, usa el del terminal), propio (usa los tres de abajo).
+TEMA=$TEMA
+
+# Colores propios, solo se aplican con TEMA=propio.
+# Son números de la paleta de 256 del terminal. Para verlos todos:
+#   for i in \$(seq 0 255); do printf "\\e[38;5;\${i}m%3d \\e[0m" \$i; done; echo
+COLOR_TEXTO=$COLOR_TEXTO
+COLOR_TITULO=$COLOR_TITULO
+COLOR_NUM=$COLOR_NUM
+EOF
+}
+grep -q '^CABECERA=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
+
+# --- pdfterm --config: abrir la configuración en el editor ------------------
+if [ "${1:-}" = "--config" ] || [ "${1:-}" = "-c" ]; then
+  exec "${EDITOR:-nano}" "$RCF"
+fi
+
+F="${1:-}"
+[ -z "$F" ] && { echo "Uso: pdfterm archivo.pdf [página]   ·   pdfterm --config"; exit 1; }
+[ -f "$F" ] || { echo "No existe: $F"; exit 1; }
+command -v pdftotext >/dev/null || { echo "Falta poppler-utils"; exit 1; }
+
+ID=$(readlink -f "$F" | md5sum | cut -d' ' -f1)
+POSF="$CACHE/$ID.pos"; HDRF="$CACHE/$ID.hdr"; TXTF="$CACHE/$ID.txt"
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+LIBRO=$(basename "$F" | sed -E 's/\.[Pp][Dd][Ff]$//')
+
+paleta() {
+  case "$TEMA" in
+    sepia)  C_TXT=$'\033[38;5;223m'; C_TIT=$'\033[1;38;5;215m'; C_NUM=$'\033[38;5;101m' ;;
+    normal) C_TXT='';                C_TIT=$'\033[1m';          C_NUM=$'\033[2m' ;;
+    propio) C_TXT=$'\033[38;5;'"$COLOR_TEXTO"'m'; C_TIT=$'\033[1;38;5;'"$COLOR_TITULO"'m'
+            C_NUM=$'\033[38;5;'"$COLOR_NUM"'m' ;;
+    *)      C_TXT=$'\033[38;5;252m'; C_TIT=$'\033[1;38;5;117m'; C_NUM=$'\033[38;5;240m' ;;
+  esac
+  C_OFF=$'\033[0m'
+}
+
+TOTAL=$(pdfinfo "$F" 2>/dev/null | awk '/^Pages:/{print $2}')
+[ -z "$TOTAL" ] && { echo "No se pudo leer el PDF"; exit 1; }
+PAG="${2:-$( [ -f "$POSF" ] && cat "$POSF" || echo 1 )}"
+
+if [ ! -f "$HDRF" ]; then
+  paso=$(( TOTAL / 12 )); [ "$paso" -lt 1 ] && paso=1
+  for ((p=paso; p<TOTAL; p+=paso)); do
+    pdftotext -layout -f "$p" -l "$p" "$F" - 2>/dev/null
+  done | sed -E 's/[0-9]+//g; s/[[:space:]]+/ /g; s/^ //; s/ $//' \
+       | grep -v '^ *$' | sort | uniq -c | sort -rn \
+       | awk '$1>=6 { sub(/^[[:space:]]*[0-9]+[[:space:]]/, ""); print }' > "$HDRF"
+fi
+
+filtrar() {
+  awk -v h="$HDRF" '
+    BEGIN { while ((getline l < h) > 0) if (length(l)) hdr[l]=1 }
+    { n=$0; gsub(/[0-9]+/,"",n); gsub(/[ \t]+/," ",n); gsub(/^ | $/,"",n)
+      if (!(n in hdr)) print }'
+}
+
+cabecera() {
+  local p=$1 ajustes
+  ajustes="ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
+  case "$CABECERA" in
+    oculta)   : ;;
+    minima)   printf '\033[2m%s · %d/%d\033[0m\n\n' "$LIBRO" "$p" "$TOTAL" ;;
+    compacta) printf '\033[2m%s · pág \033[0m\033[1m%d\033[0m\033[2m/%d · %s\033[0m\n' \
+                     "$(printf '%s' "$LIBRO" | cut -c1-38)" "$p" "$TOTAL" "$ajustes" ;;
+    *)        printf '\033[1m%s\033[0m\n' "$LIBRO"
+              printf '\033[2mpágina %d de %d · %s\033[0m\n' "$p" "$TOTAL" "$ajustes"
+              printf '\033[2m%*s\033[0m\n' "$(tput cols)" '' | tr ' ' '_' ;;
+  esac
+}
+
+formatear() {
+  local prefw=0 marg
+  [ "$NUM" -eq 1 ] && prefw=6
+  marg=$(( ( $(tput cols) - ANCHO - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
+  awk '
+    function flush() { if (length(buf)) { print buf; print ""; buf="" } }
+    /^[[:space:]]*$/       { flush(); next }
+    /^[[:space:]]{2,}/     { flush(); sub(/^[[:space:]]+/,""); buf=$0; next }
+                           { sub(/^[[:space:]]+/,""); sub(/[[:space:]]+$/,"")
+                             buf = length(buf) ? buf " " $0 : $0 }
+    END { flush() }
+  ' | fmt -w "$ANCHO" | awk -v m="$marg" -v il="$INTER" -v pp="$PARRAFO" -v num="$NUM" \
+        -v ct="$C_TXT" -v cl="$C_TIT" -v cn="$C_NUM" -v off="$C_OFF" '
+    BEGIN { n = 0 }
+    /^[[:space:]]*$/ { for (i = 0; i < pp - il; i++) print ""; next }
+    {
+      n++
+      pre = num ? sprintf("%s%3d \342\224\202 " off, cn, n) : ""
+      c   = ($0 ~ /^(Capítulo|Capitulo|CAPÍTULO|Prólogo|Epílogo|Parte|Volumen|Arco)/) ? cl : ct
+      printf "%*s%s%s%s%s\n", m, "", pre, c, $0, off
+      for (i = 0; i < il; i++) print ""
+    }'
+}
+
+render_img() {
+  command -v chafa >/dev/null || { echo "  (instala chafa para ver las ilustraciones)"; return; }
+  pdftoppm -f "$1" -l "$1" -r 150 -png -singlefile "$F" "$TMP/pg" 2>/dev/null
+  chafa --size="$(tput cols)x$(( $(tput lines) - 6 ))" "$TMP/pg.png" 2>/dev/null
+}
+
+mostrar() {
+  local p=$1 txt
+  clear; cabecera "$p"
+  txt=$(pdftotext -layout -f "$p" -l "$p" "$F" - 2>/dev/null | filtrar | sed '/^[[:space:]]*$/d')
+  if [ "${#txt}" -lt 120 ]; then
+    render_img "$p"; [ -n "$txt" ] && printf '%s\n' "$txt"
+  else
+    printf '%s\n' "$txt" | formatear
+  fi
+}
+
+buscar() {
+  [ -f "$TXTF" ] || pdftotext -layout "$F" "$TXTF" 2>/dev/null
+  awk -v RS='\f' -v q="$1" 'tolower($0) ~ tolower(q) { print NR }' "$TXTF" | head -20
+}
+
+paleta
+while :; do
+  mostrar "$PAG"; echo "$PAG" > "$POSF"
+  printf '\n\033[2m[Enter]sig [p]ant [nº]ir [/]buscar [i]magen · [+/-]inter [./,]párrafo [</>]ancho [#]números [t]ema [h]cabecera · [q]salir\033[0m > '
+  read -r cmd || break
+  case "$cmd" in
+    ""|n) [ "$PAG" -lt "$TOTAL" ] && PAG=$((PAG+1)) ;;
+    p)    [ "$PAG" -gt 1 ] && PAG=$((PAG-1)) ;;
+    +)    INTER=$((INTER+1));     [ "$INTER" -gt 3 ]   && INTER=3;   guardar_conf ;;
+    -)    INTER=$((INTER-1));     [ "$INTER" -lt 0 ]   && INTER=0;   guardar_conf ;;
+    .)    PARRAFO=$((PARRAFO+1)); [ "$PARRAFO" -gt 6 ] && PARRAFO=6; guardar_conf ;;
+    ,)    PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; guardar_conf ;;
+    '>')  ANCHO=$((ANCHO+4));     [ "$ANCHO" -gt 120 ] && ANCHO=120; guardar_conf ;;
+    '<')  ANCHO=$((ANCHO-4));     [ "$ANCHO" -lt 40 ]  && ANCHO=40;  guardar_conf ;;
+    '#')  NUM=$(( 1 - NUM )); guardar_conf ;;
+    t)    case "$TEMA" in suave) TEMA=sepia;; sepia) TEMA=normal;; normal) TEMA=propio;; *) TEMA=suave;; esac
+          paleta; guardar_conf ;;
+    h)    case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;
+                             minima) CABECERA=oculta;; *) CABECERA=completa;; esac
+          guardar_conf ;;
+    i)    clear; render_img "$PAG"; printf '\nEnter para volver > '; read -r _ ;;
+    q)    clear; break ;;
+    /*)   res=$(buscar "${cmd#/}")
+          if [ -z "$res" ]; then printf 'Sin resultados. Enter > '; read -r _
+          else clear; echo "Páginas con «${cmd#/}»:"; echo "$res" | tr '\n' ' '
+               printf '\n\nIr a la página > '; read -r n
+               [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le "$TOTAL" ] && PAG=$n
+          fi ;;
+    *)    [[ "$cmd" =~ ^[0-9]+$ ]] && [ "$cmd" -ge 1 ] && [ "$cmd" -le "$TOTAL" ] && PAG=$cmd ;;
+  esac
+done

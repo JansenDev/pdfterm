@@ -1,0 +1,14 @@
+Package: pdfterm
+Version: 1.0.0
+Section: text
+Priority: optional
+Architecture: all
+Depends: poppler-utils, gawk, coreutils, sed, grep, ncurses-bin
+Recommends: chafa
+Maintainer: janssen <bkmcfree@hotmail.com>
+Description: Lector de PDF para la terminal
+ Muestra un PDF pagina a pagina como texto formateado, con ancho de columna,
+ interlineado y separacion de parrafos configurables. Detecta y elimina las
+ cabeceras y pies que se repiten, numera los renglones y recuerda por que
+ pagina ibas en cada libro. Las paginas que son ilustraciones se dibujan en
+ la terminal si chafa esta instalado.
