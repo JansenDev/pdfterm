@@ -3,6 +3,14 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.1.1] - 2026-09-07
+
+### Revertido
+
+- La paginación interna que introdujo la 1.1.0. Partía cada página del PDF en
+  varias pantallas por las que había que ir avanzando, y eso estorbaba más de
+  lo que resolvía. `Enter` vuelve a pasar directamente a la página siguiente.
+
 ## [1.1.0] - 2026-09-07
 
 ### Corregido
