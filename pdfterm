@@ -15,6 +15,8 @@ CABECERA=completa # completa | compacta | minima | oculta
 COLOR_TEXTO=252   # solo si TEMA=propio
 COLOR_TITULO=117
 COLOR_NUM=240
+RATON=1           # el raton marca el renglon donde haces clic
+COLOR_MARCA=214   # color del renglon marcado
 [ -f "$RCF" ] && . "$RCF"
 
 guardar_conf() {
@@ -60,9 +62,20 @@ TEMA=$TEMA
 COLOR_TEXTO=$COLOR_TEXTO
 COLOR_TITULO=$COLOR_TITULO
 COLOR_NUM=$COLOR_NUM
+
+# ---- Seguimiento de lectura ------------------------------------------------
+
+# Marca de lectura con el raton. 1 = un clic marca el renglon donde pinchas,
+# 0 = el raton se comporta como siempre y puedes seleccionar texto.
+# Dentro del lector se alterna con la tecla r; con el raton activo, para
+# seleccionar texto hay que mantener Shift mientras arrastras.
+RATON=$RATON
+
+# Color del renglon marcado, de la paleta de 256.
+COLOR_MARCA=$COLOR_MARCA
 EOF
 }
-grep -q '^CABECERA=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
+grep -q '^RATON=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
 
 # --- pdfterm --config: abrir la configuración en el editor ------------------
 if [ "${1:-}" = "--config" ] || [ "${1:-}" = "-c" ]; then
@@ -87,12 +100,16 @@ paleta() {
             C_NUM=$'\033[38;5;'"$COLOR_NUM"'m' ;;
     *)      C_TXT=$'\033[38;5;252m'; C_TIT=$'\033[1;38;5;117m'; C_NUM=$'\033[38;5;240m' ;;
   esac
+  C_MRK=$'\033[1;38;5;'"$COLOR_MARCA"'m'
   C_OFF=$'\033[0m'
 }
 
 TOTAL=$(pdfinfo "$F" 2>/dev/null | awk '/^Pages:/{print $2}')
 [ -z "$TOTAL" ] && { echo "No se pudo leer el PDF"; exit 1; }
-PAG="${2:-$( [ -f "$POSF" ] && cat "$POSF" || echo 1 )}"
+GUARDADO=$( [ -f "$POSF" ] && cat "$POSF" || echo "1 1" )
+PAG="${2:-${GUARDADO%% *}}"
+MARCA="${GUARDADO##* }"; [[ "$MARCA" =~ ^[0-9]+$ ]] || MARCA=1
+[ -n "${2:-}" ] && MARCA=1
 
 if [ ! -f "$HDRF" ]; then
   paso=$(( TOTAL / 12 )); [ "$paso" -lt 1 ] && paso=1
@@ -112,7 +129,7 @@ filtrar() {
 
 cabecera() {
   local p=$1 ajustes
-  ajustes="ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
+  ajustes="renglón $MARCA/$RENGLONES · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
   case "$CABECERA" in
     oculta)   : ;;
     minima)   printf '\033[2m%s · %d/%d\033[0m\n\n' "$LIBRO" "$p" "$TOTAL" ;;
@@ -136,15 +153,20 @@ formatear() {
                              buf = length(buf) ? buf " " $0 : $0 }
     END { flush() }
   ' | fmt -w "$ANCHO" | awk -v m="$marg" -v il="$INTER" -v pp="$PARRAFO" -v num="$NUM" \
-        -v ct="$C_TXT" -v cl="$C_TIT" -v cn="$C_NUM" -v off="$C_OFF" '
-    BEGIN { n = 0 }
-    /^[[:space:]]*$/ { for (i = 0; i < pp - il; i++) print ""; next }
+        -v ct="$C_TXT" -v cl="$C_TIT" -v cn="$C_NUM" -v off="$C_OFF" \
+        -v mapa="$TMP/mapa" '
+    # Ademas del texto escribe un mapa: por cada linea de salida, el numero de
+    # renglon al que corresponde (0 si es una linea en blanco). Sirve para
+    # traducir la fila donde se hace clic al renglon que hay debajo.
+    BEGIN { n = 0; printf "" > mapa }
+    /^[[:space:]]*$/ { for (i = 0; i < pp - il; i++) { print ""; print 0 > mapa } next }
     {
       n++
       pre = num ? sprintf("%s%3d \342\224\202 " off, cn, n) : ""
-      c   = ($0 ~ /^(Capítulo|Capitulo|CAPÍTULO|Prólogo|Epílogo|Parte|Volumen|Arco)/) ? cl : ct
+      c = ($0 ~ /^(Capítulo|Capitulo|CAPÍTULO|Prólogo|Epílogo|Parte|Volumen|Arco)/) ? cl : ct
       printf "%*s%s%s%s%s\n", m, "", pre, c, $0, off
-      for (i = 0; i < il; i++) print ""
+      print n > mapa
+      for (i = 0; i < il; i++) { print ""; print 0 > mapa }
     }'
 }
 
@@ -154,15 +176,74 @@ render_img() {
   chafa --size="$(tput cols)x$(( $(tput lines) - 6 ))" "$TMP/pg.png" 2>/dev/null
 }
 
-mostrar() {
-  local p=$1 txt
-  clear; cabecera "$p"
-  txt=$(pdftotext -layout -f "$p" -l "$p" "$F" - 2>/dev/null | filtrar | sed '/^[[:space:]]*$/d')
+# Cuantas lineas ocupa la cabecera, para descontarlas al traducir un clic
+alto_cabecera() {
+  case "$CABECERA" in
+    oculta) echo 0 ;; compacta) echo 1 ;; minima) echo 2 ;; *) echo 3 ;;
+  esac
+}
+
+render() {
+  local txt
+  txt=$(pdftotext -layout -f "$PAG" -l "$PAG" "$F" - 2>/dev/null | filtrar | sed '/^[[:space:]]*$/d')
   if [ "${#txt}" -lt 120 ]; then
-    render_img "$p"; [ -n "$txt" ] && printf '%s\n' "$txt"
+    TIPO=img; : > "$TMP/pagina"; : > "$TMP/mapa"; RENGLONES=0
   else
-    printf '%s\n' "$txt" | formatear
+    TIPO=txt
+    printf '%s\n' "$txt" | formatear > "$TMP/pagina"
+    RENGLONES=$(sort -n "$TMP/mapa" | tail -1); [ -z "$RENGLONES" ] && RENGLONES=0
   fi
+  [ "$MARCA" -gt "$RENGLONES" ] && { MARCA=$RENGLONES; [ "$MARCA" -lt 1 ] && MARCA=1; }
+  seguir_marca
+}
+
+# Alto util: la ventana menos la cabecera, la linea en blanco y el prompt.
+# Nunca se imprime mas que esto, asi el terminal no desplaza por su cuenta.
+calcular_alto() {
+  ALTO=$(( $(tput lines) - $(alto_cabecera) - 2 ))
+  [ "$ALTO" -lt 5 ] && ALTO=5
+}
+
+# Desplaza la vista lo justo para que el renglon marcado quede visible
+seguir_marca() {
+  local lm total
+  lm=$(grep -n "^${MARCA}$" "$TMP/mapa" | head -1 | cut -d: -f1)
+  [ -z "$lm" ] && return
+  LM=$lm
+  total=$(wc -l < "$TMP/pagina")
+  calcular_alto
+  [ "$lm" -lt "$VISTA" ] && VISTA=$lm
+  [ "$lm" -gt $(( VISTA + ALTO - 1 )) ] && VISTA=$(( lm - ALTO + 1 ))
+  [ "$VISTA" -gt $(( total - ALTO + 1 )) ] && VISTA=$(( total - ALTO + 1 ))
+  [ "$VISTA" -lt 1 ] && VISTA=1
+}
+
+mostrar() {
+  if [ "$TIPO" = img ]; then
+    clear; cabecera "$PAG"; render_img "$PAG"; return
+  fi
+  calcular_alto
+  { cabecera "$PAG"
+    sed -n "${VISTA},$(( VISTA + ALTO - 1 ))p" "$TMP/pagina" \
+      | awk -v lm="$LM" -v v="$VISTA" -v cm="$C_MRK" -v off="$C_OFF" '
+          { if (v + NR - 1 == lm) {
+              gsub(/\033\[[0-9;]*m/, ""); sub(/│/, "▸"); print cm $0 off
+            } else print }'
+  } | sed 's/$/\x1b[K/' > "$TMP/vista"
+  printf '\033[H'; cat "$TMP/vista"; printf '\033[J'
+}
+
+# Traduce la fila de pantalla donde se hizo clic al renglon que hay debajo.
+# Si el texto desbordo la ventana, el terminal ya ha desplazado: se descuenta
+# ese desplazamiento para saber que linea del documento se ve en esa fila.
+fila_a_renglon() {
+  local y=$1 cab idx r
+  cab=$(alto_cabecera)
+  idx=$(( VISTA + y - cab - 1 ))
+  [ "$idx" -lt 1 ] && return 1
+  r=$(sed -n "${idx}p" "$TMP/mapa")
+  [[ "$r" =~ ^[0-9]+$ ]] && [ "$r" -gt 0 ] && { echo "$r"; return 0; }
+  return 1
 }
 
 buscar() {
@@ -170,34 +251,93 @@ buscar() {
   awk -v RS='\f' -v q="$1" 'tolower($0) ~ tolower(q) { print NR }' "$TXTF" | head -20
 }
 
+# ── Entrada por teclas sueltas y raton ──────────────────────────────────────
+
+raton_on()  { [ "$RATON" -eq 1 ] && printf '\033[?1000h\033[?1006h'; }
+raton_off() { printf '\033[?1006l\033[?1000l'; }
+restaurar() { raton_off; printf '\033[?25h\033[?1049l'; }
+trap 'rm -rf "$TMP"; restaurar' EXIT
+
+# Lee una pulsacion. Deja el resultado en TECLA; si es del raton, ademas en
+# MB (boton), MX/MY (columna y fila) y MT (M al pulsar, m al soltar).
+leer_tecla() {
+  local c d e sec
+  IFS= read -rsn1 c || return 1
+  if [ "$c" != $'\033' ]; then TECLA="$c"; return 0; fi
+  IFS= read -rsn1 -t 0.05 d || { TECLA=esc; return 0; }
+  [ "$d" != "[" ] && { TECLA=esc; return 0; }
+  sec=""
+  while IFS= read -rsn1 e; do
+    sec+="$e"
+    case "$e" in [A-Za-z~]) break ;; esac
+  done
+  case "$sec" in
+    A) TECLA=arriba ;;  B) TECLA=abajo ;;
+    C) TECLA=derecha ;; D) TECLA=izquierda ;;
+    "<"*) if [[ "$sec" =~ ^\<([0-9]+)\;([0-9]+)\;([0-9]+)([Mm])$ ]]; then
+            MB="${BASH_REMATCH[1]}"; MX="${BASH_REMATCH[2]}"
+            MY="${BASH_REMATCH[3]}"; MT="${BASH_REMATCH[4]}"; TECLA=raton
+          else TECLA=otra; fi ;;
+    *) TECLA=otra ;;
+  esac
+}
+
+# Pide una linea de texto. Suspende el raton para no capturar sus codigos.
+pedir() {
+  raton_off; printf '\033[?25h'
+  printf '%s' "$1"; IFS= read -r RESP
+  printf '\033[?25l'; raton_on
+}
+
+VISTA=1; ALTO=20; RENGLONES=0; LM=1; TIPO=txt
 paleta
+printf '\033[?1049h\033[2J\033[?25l'
+raton_on
+render
 while :; do
-  mostrar "$PAG"; echo "$PAG" > "$POSF"
-  printf '\n\033[2m[Enter]sig [p]ant [nº]ir [/]buscar [i]magen · [+/-]inter [./,]párrafo [</>]ancho [#]números [t]ema [h]cabecera · [q]salir\033[0m > '
-  read -r cmd || break
-  case "$cmd" in
-    ""|n) [ "$PAG" -lt "$TOTAL" ] && PAG=$((PAG+1)) ;;
-    p)    [ "$PAG" -gt 1 ] && PAG=$((PAG-1)) ;;
-    +)    INTER=$((INTER+1));     [ "$INTER" -gt 3 ]   && INTER=3;   guardar_conf ;;
-    -)    INTER=$((INTER-1));     [ "$INTER" -lt 0 ]   && INTER=0;   guardar_conf ;;
-    .)    PARRAFO=$((PARRAFO+1)); [ "$PARRAFO" -gt 6 ] && PARRAFO=6; guardar_conf ;;
-    ,)    PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; guardar_conf ;;
-    '>')  ANCHO=$((ANCHO+4));     [ "$ANCHO" -gt 120 ] && ANCHO=120; guardar_conf ;;
-    '<')  ANCHO=$((ANCHO-4));     [ "$ANCHO" -lt 40 ]  && ANCHO=40;  guardar_conf ;;
-    '#')  NUM=$(( 1 - NUM )); guardar_conf ;;
-    t)    case "$TEMA" in suave) TEMA=sepia;; sepia) TEMA=normal;; normal) TEMA=propio;; *) TEMA=suave;; esac
-          paleta; guardar_conf ;;
-    h)    case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;
-                             minima) CABECERA=oculta;; *) CABECERA=completa;; esac
-          guardar_conf ;;
-    i)    clear; render_img "$PAG"; printf '\nEnter para volver > '; read -r _ ;;
-    q)    clear; break ;;
-    /*)   res=$(buscar "${cmd#/}")
-          if [ -z "$res" ]; then printf 'Sin resultados. Enter > '; read -r _
-          else clear; echo "Páginas con «${cmd#/}»:"; echo "$res" | tr '\n' ' '
-               printf '\n\nIr a la página > '; read -r n
-               [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -ge 1 ] && [ "$n" -le "$TOTAL" ] && PAG=$n
-          fi ;;
-    *)    [[ "$cmd" =~ ^[0-9]+$ ]] && [ "$cmd" -ge 1 ] && [ "$cmd" -le "$TOTAL" ] && PAG=$cmd ;;
+  mostrar; echo "$PAG $MARCA" > "$POSF"
+  printf '\n\033[2m[espacio]sig [p]ant [j/k o rueda]marca [clic]marcar [g]ir [/]buscar [i]magen · [+/-]inter [./,]parr [</>]ancho [#]num [t]ema [h]cab [r]raton [q]salir\033[0m'
+  leer_tecla || break
+  case "$TECLA" in
+    ' '|n|derecha) [ "$PAG" -lt "$TOTAL" ] && { PAG=$((PAG+1)); MARCA=1; VISTA=1; render; } ;;
+    p|izquierda)   [ "$PAG" -gt 1 ]        && { PAG=$((PAG-1)); MARCA=1; VISTA=1; render; } ;;
+    j|abajo)       [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; } ;;
+    k|arriba)      [ "$MARCA" -gt 1 ]            && { MARCA=$((MARCA-1)); seguir_marca; } ;;
+    raton)
+      case "$MB" in
+        0)  [ "$MT" = "M" ] && { r=$(fila_a_renglon "$MY") && { MARCA=$r; seguir_marca; }; } ;;
+        64) [ "$MARCA" -gt 1 ]            && { MARCA=$((MARCA-1)); seguir_marca; } ;;
+        65) [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; } ;;
+      esac ;;
+    r)  RATON=$(( 1 - RATON )); guardar_conf
+        if [ "$RATON" -eq 1 ]; then raton_on; else raton_off; fi ;;
+    +)  INTER=$((INTER+1));     [ "$INTER" -gt 3 ]   && INTER=3;   guardar_conf; render ;;
+    -)  INTER=$((INTER-1));     [ "$INTER" -lt 0 ]   && INTER=0;   guardar_conf; render ;;
+    .)  PARRAFO=$((PARRAFO+1)); [ "$PARRAFO" -gt 6 ] && PARRAFO=6; guardar_conf; render ;;
+    ,)  PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; guardar_conf; render ;;
+    '>') ANCHO=$((ANCHO+4));    [ "$ANCHO" -gt 120 ] && ANCHO=120; guardar_conf; render ;;
+    '<') ANCHO=$((ANCHO-4));    [ "$ANCHO" -lt 40 ]  && ANCHO=40;  guardar_conf; render ;;
+    '#') NUM=$(( 1 - NUM )); guardar_conf; render ;;
+    t)  case "$TEMA" in suave) TEMA=sepia;; sepia) TEMA=normal;; normal) TEMA=propio;; *) TEMA=suave;; esac
+        paleta; guardar_conf; render ;;
+    h)  case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;
+                            minima) CABECERA=oculta;; *) CABECERA=completa;; esac
+        guardar_conf ;;
+    g)  pedir "Ir a la página > "
+        [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
+          && { PAG=$RESP; MARCA=1; VISTA=1; render; } ;;
+    i)  clear; render_img "$PAG"; pedir "Enter para volver > " ;;
+    /)  pedir "Buscar > "
+        if [ -n "$RESP" ]; then
+          res=$(buscar "$RESP")
+          clear
+          if [ -z "$res" ]; then pedir "Sin resultados. Enter > "
+          else echo "Páginas con «$RESP»:"; echo "$res" | tr '\n' ' '; echo
+               pedir $'\n''Ir a la página > '
+               [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
+                 && { PAG=$RESP; MARCA=1; VISTA=1; render; }
+          fi
+        fi ;;
+    q)  clear; break ;;
   esac
 done
