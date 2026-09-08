@@ -3,6 +3,14 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [No publicado]
+
+### Cambiado
+
+- La configuración se guarda con un pequeño retardo en vez de en cada
+  pulsación: mantener pulsada una tecla de ajuste reescribía el fichero entero
+  decenas de veces. Se vuelca al dejar de pulsar y también al salir.
+
 ## [1.4.0] - 2026-09-08
 
 ### Añadido

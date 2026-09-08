@@ -69,6 +69,13 @@ Dos reglas que no son evidentes al leer el código y que costó descubrir:
 - **`render()` solo se llama al cambiar de página o de formato**, nunca al mover
   la guía. Extraer la página con `pdftotext` cuesta unos 86 ms; hacerlo en cada
   pulsación volvía el lector inusable. Mover la guía solo repinta, y eso son 3 ms.
+- **La configuración se escribe con retardo.** Los ajustes llaman a
+  `marcar_conf()`, y `volcar_conf()` escribe el fichero cuando pasan 0,4 s sin
+  pulsar nada, aprovechando el timeout de `read` en `leer_tecla()`. Mantener
+  pulsado `>` o `+` reescribia los 2 KB del fichero en cada repeticion. El
+  `trap EXIT` vuelca lo pendiente, asi que salir no pierde nada.
+  La posicion de lectura (`.pos`) **si** se escribe en cada pulsacion: son 7
+  bytes, y es el dato que mas molesta perder.
 - **`mostrar()` no borra la pantalla.** Reposiciona el cursor con `\033[H` y
   sobrescribe, borrando cada línea con `\033[K` justo antes de reescribirla. Un
   `clear` deja la pantalla vacía mientras se prepara el contenido, y ese hueco

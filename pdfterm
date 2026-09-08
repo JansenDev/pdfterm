@@ -23,6 +23,13 @@ RATON=1           # el raton marca el renglon donde haces clic
 COLOR_MARCA=214   # color del renglon marcado
 [ -f "$RCF" ] && . "$RCF"
 
+CONF_SUCIO=0
+# Los ajustes marcan la configuracion como pendiente en vez de escribirla: si
+# se mantiene pulsada una tecla como > o +, reescribir el fichero entero en
+# cada repeticion es trabajo tirado. Se vuelca cuando se deja de pulsar.
+marcar_conf() { CONF_SUCIO=1; }
+volcar_conf() { [ "$CONF_SUCIO" -eq 1 ] && { guardar_conf; CONF_SUCIO=0; }; return 0; }
+
 guardar_conf() {
   cat > "$RCF" <<EOF
 # Configuración de pdfterm. Se puede editar a mano; también se actualiza
@@ -450,13 +457,18 @@ buscar() {
 raton_on()  { [ "$RATON" -eq 1 ] && printf '\033[?1000h\033[?1006h'; }
 raton_off() { printf '\033[?1006l\033[?1000l'; }
 restaurar() { raton_off; printf '\033[?25h\033[?1049l'; }
-trap 'rm -rf "$TMP"; restaurar' EXIT
+trap 'volcar_conf; rm -rf "$TMP"; restaurar' EXIT
 
 # Lee una pulsacion. Deja el resultado en TECLA; si es del raton, ademas en
 # MB (boton), MX/MY (columna y fila) y MT (M al pulsar, m al soltar).
 leer_tecla() {
-  local c d e sec
-  IFS= read -rsn1 c || return 1
+  local c d e sec rc
+  while :; do
+    IFS= read -rsn1 -t 0.4 c; rc=$?
+    [ "$rc" -eq 0 ] && break
+    if [ "$rc" -gt 128 ]; then volcar_conf; continue; fi   # 0,4 s sin pulsar
+    return 1                                                # fin de entrada
+  done
   if [ "$c" != $'\033' ]; then TECLA="$c"; return 0; fi
   IFS= read -rsn1 -t 0.05 d || { TECLA=esc; return 0; }
   [ "$d" != "[" ] && { TECLA=esc; return 0; }
@@ -504,8 +516,8 @@ while :; do
                 [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
               else scroll_vista -1; fi ;;
     L)  case "$GUIA_ESTILO" in marca) GUIA_ESTILO=linea ;; *) GUIA_ESTILO=marca ;; esac
-        guardar_conf ;;
-    l)  GUIA=$(( 1 - GUIA )); guardar_conf
+        marcar_conf ;;
+    l)  GUIA=$(( 1 - GUIA )); marcar_conf
         [ "$GUIA" -eq 1 ] && guia_al_reactivar ;;
     raton)
       case "$MB" in
@@ -518,20 +530,20 @@ while :; do
               [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; }
             else scroll_vista 3; fi ;;
       esac ;;
-    r)  RATON=$(( 1 - RATON )); guardar_conf
+    r)  RATON=$(( 1 - RATON )); marcar_conf
         if [ "$RATON" -eq 1 ]; then raton_on; else raton_off; fi ;;
-    +)  INTER=$((INTER+1));     [ "$INTER" -gt 3 ]   && INTER=3;   guardar_conf; render ;;
-    -)  INTER=$((INTER-1));     [ "$INTER" -lt 0 ]   && INTER=0;   guardar_conf; render ;;
-    .)  PARRAFO=$((PARRAFO+1)); [ "$PARRAFO" -gt 6 ] && PARRAFO=6; guardar_conf; render ;;
-    ,)  PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; guardar_conf; render ;;
-    '>') ANCHO=$((ANCHO+4));    [ "$ANCHO" -gt 120 ] && ANCHO=120; guardar_conf; render ;;
-    '<') ANCHO=$((ANCHO-4));    [ "$ANCHO" -lt 40 ]  && ANCHO=40;  guardar_conf; render ;;
-    '#'|0) NUM=$(( 1 - NUM )); guardar_conf; render ;;
+    +)  INTER=$((INTER+1));     [ "$INTER" -gt 3 ]   && INTER=3;   marcar_conf; render ;;
+    -)  INTER=$((INTER-1));     [ "$INTER" -lt 0 ]   && INTER=0;   marcar_conf; render ;;
+    .)  PARRAFO=$((PARRAFO+1)); [ "$PARRAFO" -gt 6 ] && PARRAFO=6; marcar_conf; render ;;
+    ,)  PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; marcar_conf; render ;;
+    '>') ANCHO=$((ANCHO+4));    [ "$ANCHO" -gt 120 ] && ANCHO=120; marcar_conf; render ;;
+    '<') ANCHO=$((ANCHO-4));    [ "$ANCHO" -lt 40 ]  && ANCHO=40;  marcar_conf; render ;;
+    '#'|0) NUM=$(( 1 - NUM )); marcar_conf; render ;;
     t)  case "$TEMA" in suave) TEMA=sepia;; sepia) TEMA=normal;; normal) TEMA=propio;; *) TEMA=suave;; esac
-        paleta; guardar_conf; render ;;
+        paleta; marcar_conf; render ;;
     h)  case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;
                             minima) CABECERA=oculta;; *) CABECERA=completa;; esac
-        guardar_conf ;;
+        marcar_conf ;;
     g)  pedir "Ir a la página > "
         [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
           && { PAG=$RESP; MARCA=1; VISTA=1; render; } ;;
@@ -543,7 +555,7 @@ while :; do
           iterm)   IMG_FORMATO=symbols ;;
           *)       IMG_FORMATO=auto ;;
         esac
-        guardar_conf
+        marcar_conf
         clear; printf 'Formato de imagen: \033[1m%s\033[0m\n\n' "$IMG_FORMATO"
         render_img "$PAG" $(( $(lineas) - 4 )); pedir $'\n''Enter para volver > ' ;;
     I)  clear
