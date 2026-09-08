@@ -112,19 +112,31 @@ install -m 755 "$FUENTE" "$DESTINO/pdfterm"
 # Si el destino no esta en el PATH, se añade al perfil del shell para que la
 # instalacion quede completa sin pasos manuales.
 anadir_al_path() {
-  local rc
+  local rc perfiles=() puestos=()
   case "${SHELL:-}" in
     */zsh)  rc="$HOME/.zshrc" ;;
     */bash) rc="$HOME/.bashrc" ;;
     *)      if [ -f "$HOME/.zshrc" ]; then rc="$HOME/.zshrc"; else rc="$HOME/.bashrc"; fi ;;
   esac
-  if grep -qF "$DESTINO" "$rc" 2>/dev/null; then
-    echo "    $DESTINO ya figura en $rc; abre una terminal nueva"
-    return
+  perfiles+=("$rc")
+  # Las shells de login no leen .bashrc, y el de Debian ademas se corta en las
+  # no interactivas: hay que pasar tambien por .profile.
+  case "$rc" in
+    *".bashrc") [ -f "$HOME/.profile" ] && perfiles+=("$HOME/.profile") ;;
+  esac
+
+  for rc in "${perfiles[@]}"; do
+    grep -qF "$DESTINO" "$rc" 2>/dev/null && continue
+    { printf '\n# pdfterm\n'; printf 'export PATH="%s:$PATH"\n' "$DESTINO"; } >> "$rc"
+    puestos+=("$rc")
+  done
+
+  if [ "${#puestos[@]}" -eq 0 ]; then
+    echo "    $DESTINO ya figura en tu perfil; abre una terminal nueva"
+  else
+    echo "    Añadido $DESTINO al PATH en ${puestos[*]}"
+    echo "    Para usarlo ya en esta terminal:  export PATH=\"$DESTINO:\$PATH\""
   fi
-  { printf '\n# pdfterm\n'; printf 'export PATH="%s:$PATH"\n' "$DESTINO"; } >> "$rc"
-  echo "    Añadido $DESTINO al PATH en $rc"
-  echo "    Para usarlo ya en esta terminal:  source $rc"
 }
 
 case ":$PATH:" in
