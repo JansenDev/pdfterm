@@ -30,14 +30,7 @@ Instala en `/usr/bin/pdfterm`, disponible para todos los usuarios.
 
 ### 2. En una línea, sin clonar nada
 
-Si el repositorio es público:
-
     curl -fsSL https://raw.githubusercontent.com/JansenDev/pdfterm/main/install.sh | bash
-
-Como es privado, hace falta un token con permiso de lectura. Con `gh` instalado
-y autenticado en la máquina destino:
-
-    GITHUB_TOKEN=$(gh auth token) bash -c "$(curl -fsSL -H "Authorization: token $(gh auth token)" https://raw.githubusercontent.com/JansenDev/pdfterm/main/install.sh)"
 
 El instalador comprueba las dependencias, las instala con el gestor que
 encuentre, descarga el programa y lo deja en `~/.local/bin`. Acepta las mismas
