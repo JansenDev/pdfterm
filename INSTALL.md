@@ -23,8 +23,8 @@ capítulo. El paquete `.deb` y `install.sh` ya se encargan de exigirlo.
 
 El más simple: `apt` resuelve las dependencias solo.
 
-    wget https://github.com/JansenDev/pdfterm/releases/download/v1.0.0/pdfterm_1.0.0_all.deb
-    sudo apt install ./pdfterm_1.0.0_all.deb
+    wget https://github.com/JansenDev/pdfterm/releases/download/v1.2.0/pdfterm_1.2.0_all.deb
+    sudo apt install ./pdfterm_1.2.0_all.deb
 
 Instala en `/usr/bin/pdfterm`, disponible para todos los usuarios.
 

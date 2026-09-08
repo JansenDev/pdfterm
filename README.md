@@ -17,7 +17,7 @@ formateado, sin salir de la consola.
 
 En Debian, Ubuntu o WSL:
 
-    sudo apt install ./pdfterm_1.1.1_all.deb
+    sudo apt install ./pdfterm_1.2.0_all.deb
 
 En cualquier otro sistema:
 
