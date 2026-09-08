@@ -15,10 +15,11 @@ CABECERA=completa # completa | compacta | minima | oculta
 COLOR_TEXTO=252   # solo si TEMA=propio
 COLOR_TITULO=117
 COLOR_NUM=240
+GUIA=0            # guia de lectura por defecto, para libros sin estado propio
+GUIA_ESTILO=linea # linea = se pinta el renglon entero; marca = solo numero y flecha
 RATON=1           # el raton marca el renglon donde haces clic
 COLOR_MARCA=214   # color del renglon marcado
 [ -f "$RCF" ] && . "$RCF"
-GUIA=0            # cada libro se abre con la guia apagada
 
 guardar_conf() {
   cat > "$RCF" <<EOF
@@ -66,9 +67,15 @@ COLOR_NUM=$COLOR_NUM
 
 # ---- Seguimiento de lectura ------------------------------------------------
 
-# La guia de lectura (tecla l) no se guarda aqui a proposito: cada libro se
-# abre siempre con la guia apagada, y lo que decidas dentro se mantiene
-# mientras pasas paginas, hasta que cierras.
+# Guia de lectura (tecla l): 1 = encendida, 0 = apagada. Este es el valor por
+# defecto, el que se aplica a un libro que abres por primera vez. Cada libro
+# recuerda ademas el suyo en ~/.local/share/pdfterm/, y ese manda sobre este.
+GUIA=$GUIA
+
+# Como se resalta el renglon de la guia (tecla L):
+#   linea  se pinta el renglon entero con el color de la marca
+#   marca  se pinta solo el numero y la flecha, y el texto queda como el resto
+GUIA_ESTILO=$GUIA_ESTILO
 
 
 # Marca de lectura con el raton. 1 = un clic marca el renglon donde pinchas,
@@ -81,7 +88,7 @@ RATON=$RATON
 COLOR_MARCA=$COLOR_MARCA
 EOF
 }
-grep -q '^COLOR_MARCA=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
+grep -q '^GUIA_ESTILO=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
 
 # --- pdfterm --config: abrir la configuración en el editor ------------------
 if [ "${1:-}" = "--config" ] || [ "${1:-}" = "-c" ]; then
@@ -97,6 +104,8 @@ ID=$(readlink -f "$F" | md5sum | cut -d' ' -f1)
 POSF="$CACHE/$ID.pos"; HDRF="$CACHE/$ID.hdr"; TXTF="$CACHE/$ID.txt"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 LIBRO=$(basename "$F" | sed -E 's/\.[Pp][Dd][Ff]$//')
+
+AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i]magen · [+/-]inter [./,]parr [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir'
 
 # tput protesta si no hay TERM (contenedores, cron); se asume un tamaño normal
 cols()   { tput cols  2>/dev/null || echo 80; }
@@ -116,9 +125,16 @@ paleta() {
 
 TOTAL=$(pdfinfo "$F" 2>/dev/null | awk '/^Pages:/{print $2}')
 [ -z "$TOTAL" ] && { echo "No se pudo leer el PDF"; exit 1; }
+# La posicion guardada por libro es "pagina renglon guia". Si el fichero es
+# antiguo y solo trae dos campos, la guia toma el valor global.
 GUARDADO=$( [ -f "$POSF" ] && cat "$POSF" || echo "1 1" )
-PAG="${2:-${GUARDADO%% *}}"
-MARCA="${GUARDADO##* }"; [[ "$MARCA" =~ ^[0-9]+$ ]] || MARCA=1
+read -r G_PAG G_MARCA G_GUIA <<< "$GUARDADO"
+PAG="${2:-${G_PAG:-1}}"
+MARCA="${G_MARCA:-1}"
+GUIA="${G_GUIA:-$GUIA}"
+[[ "$PAG"   =~ ^[0-9]+$ ]] || PAG=1
+[[ "$MARCA" =~ ^[0-9]+$ ]] || MARCA=1
+[[ "$GUIA"  =~ ^[01]$   ]] || GUIA=0
 [ -n "${2:-}" ] && MARCA=1
 
 if [ ! -f "$HDRF" ]; then
@@ -139,7 +155,9 @@ filtrar() {
 
 cabecera() {
   local p=$1 ajustes
-  if [ "$GUIA" -eq 1 ]; then
+  if [ "$TIPO" = img ]; then
+    ajustes="ilustración · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
+  elif [ "$GUIA" -eq 1 ]; then
     ajustes="renglón $MARCA/$RENGLONES · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
   else
     ajustes="guía off · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
@@ -214,8 +232,14 @@ render() {
 
 # Alto util: la ventana menos la cabecera, la linea en blanco y el prompt.
 # Nunca se imprime mas que esto, asi el terminal no desplaza por su cuenta.
+filas_ayuda() {
+  local c n
+  c=$(cols); n=${#AYUDA}
+  echo $(( (n + c - 1) / c ))
+}
+
 calcular_alto() {
-  ALTO=$(( $(lineas) - $(alto_cabecera) - 2 ))
+  ALTO=$(( $(lineas) - $(alto_cabecera) - 1 - $(filas_ayuda) ))
   [ "$ALTO" -lt 5 ] && ALTO=5
 }
 
@@ -243,9 +267,16 @@ scroll_vista() {
   [ "$VISTA" -lt 1 ] && VISTA=1
 }
 
-# Al encender la guia, se coloca en el primer renglon visible de la vista
-guia_al_primer_visible() {
-  local n
+# Al encender la guia se respeta el renglon donde estaba, si sigue a la vista.
+# Solo cuando se ha desplazado lejos con la guia apagada se recoloca en el
+# primer renglon de lo que se esta viendo, que si no quedaria fuera de pantalla.
+guia_al_reactivar() {
+  local lm n
+  calcular_alto
+  lm=$(grep -n "^${MARCA}$" "$TMP/mapa" | head -1 | cut -d: -f1)
+  if [ -n "$lm" ] && [ "$lm" -ge "$VISTA" ] && [ "$lm" -le $(( VISTA + ALTO - 1 )) ]; then
+    seguir_marca; return
+  fi
   n=$(sed -n "${VISTA},\$p" "$TMP/mapa" | grep -m1 -v '^0$')
   [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -gt 0 ] && MARCA=$n
   seguir_marca
@@ -259,15 +290,37 @@ mostrar() {
   { cabecera "$PAG"
     sed -n "${VISTA},$(( VISTA + ALTO - 1 ))p" "$TMP/pagina" \
       | awk -v lm="$([ "$GUIA" -eq 1 ] && echo "$LM" || echo 0)" \
-            -v v="$VISTA" -v cm="$C_MRK" -v off="$C_OFF" '
-          { if (v + NR - 1 == lm) {
+            -v v="$VISTA" -v cm="$C_MRK" -v off="$C_OFF" -v estilo="$GUIA_ESTILO" '
+          # Sin numeros la flecha ocupa sitio del margen izquierdo, nunca se
+          # antepone: si se añadiera delante empujaria el texto y el renglon
+          # marcado quedaria desalineado respecto a los demas.
+          function flecha(ini, fin,   n) {
+            if (match($0, /^ +/)) n = RLENGTH; else n = 0
+            # Se coloca al final del margen, pegada al texto, ocupando el
+            # sitio de los espacios para no desplazar el renglon.
+            if      (n >= 2) $0 = substr($0, 1, n - 2) ini "▸ " fin substr($0, n + 1)
+            else if (n == 1) $0 = ini "▸" fin substr($0, 2)
+            else             $0 = ini "▸" fin $0
+          }
+          { if (v + NR - 1 != lm) { print; next }
+            if (estilo == "marca") {
+              # Solo el indicador: la flecha y, si se ven, los numeros
+              if (sub(/│/, "▸")) sub(/\033\[[0-9;]*m/, cm)
+              else flecha(cm, off)
+              print
+            } else {
+              # El renglon entero con el color de la marca
               gsub(/\033\[[0-9;]*m/, "")
-              # Con numeros se marca sustituyendo el separador; sin ellos hay
-              # que meter la flecha comiendose parte del margen izquierdo.
-              if (!sub(/│/, "▸")) { if (!sub(/^  /, "▸ ")) sub(/^/, "▸ ") }
+              if (!sub(/│/, "▸")) flecha("", "")
               print cm $0 off
-            } else print }'
+            }
+          }'
   } | sed 's/$/\x1b[K/' > "$TMP/vista"
+  # Completar con lineas vacias para que la barra quede siempre a la misma altura
+  local pintadas faltan
+  pintadas=$(wc -l < "$TMP/vista")
+  faltan=$(( ALTO + $(alto_cabecera) - pintadas ))
+  while [ "$faltan" -gt 0 ]; do printf '\033[K\n' >> "$TMP/vista"; faltan=$(( faltan - 1 )); done
   printf '\033[H'; cat "$TMP/vista"; printf '\033[J'
 }
 
@@ -333,8 +386,8 @@ printf '\033[?1049h\033[2J\033[?25l'
 raton_on
 render
 while :; do
-  mostrar; echo "$PAG $MARCA" > "$POSF"
-  printf '\n\033[2m[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [g]ir [/]buscar [i]magen · [+/-]inter [./,]parr [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir\033[0m'
+  mostrar; echo "$PAG $MARCA $GUIA" > "$POSF"
+  printf '\n\033[2m%s\033[0m' "$AYUDA"
   leer_tecla || break
   case "$TECLA" in
     ' '|n|derecha) [ "$PAG" -lt "$TOTAL" ] && { PAG=$((PAG+1)); MARCA=1; VISTA=1; render; } ;;
@@ -345,8 +398,10 @@ while :; do
     k|arriba) if [ "$GUIA" -eq 1 ]; then
                 [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
               else scroll_vista -1; fi ;;
-    l)  GUIA=$(( 1 - GUIA ))
-        [ "$GUIA" -eq 1 ] && guia_al_primer_visible ;;
+    L)  case "$GUIA_ESTILO" in marca) GUIA_ESTILO=linea ;; *) GUIA_ESTILO=marca ;; esac
+        guardar_conf ;;
+    l)  GUIA=$(( 1 - GUIA )); guardar_conf
+        [ "$GUIA" -eq 1 ] && guia_al_reactivar ;;
     raton)
       case "$MB" in
         0)  [ "$GUIA" -eq 1 ] && [ "$MT" = "M" ] \
