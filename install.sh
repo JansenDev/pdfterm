@@ -51,11 +51,23 @@ command -v chafa >/dev/null || FALTAN+=("chafa")
 
 if [ "${#FALTAN[@]}" -gt 0 ]; then
   echo "    Faltan: ${FALTAN[*]}"
-  if   command -v apt-get >/dev/null; then ORDEN="sudo apt-get install -y ${FALTAN[*]}"
-  elif command -v dnf     >/dev/null; then ORDEN="sudo dnf install -y ${FALTAN[*]}"
-  elif command -v pacman  >/dev/null; then ORDEN="sudo pacman -S --needed --noconfirm ${FALTAN[*]}"
-  elif command -v zypper  >/dev/null; then ORDEN="sudo zypper install -y ${FALTAN[*]}"
-  elif command -v apk     >/dev/null; then ORDEN="sudo apk add poppler-utils gawk chafa"
+
+  # Siendo root no hace falta sudo, y en muchas imagenes ni siquiera existe
+  SUDO=""
+  if [ "$(id -u)" -ne 0 ]; then
+    if command -v sudo >/dev/null; then SUDO="sudo "
+    else
+      echo "    Hay que instalarlas como root, y no encuentro sudo." >&2
+      echo "    Instálalas a mano: ${FALTAN[*]}" >&2
+      exit 1
+    fi
+  fi
+
+  if   command -v apt-get >/dev/null; then ORDEN="${SUDO}apt-get update -qq && ${SUDO}apt-get install -y ${FALTAN[*]}"
+  elif command -v dnf     >/dev/null; then ORDEN="${SUDO}dnf install -y ${FALTAN[*]}"
+  elif command -v pacman  >/dev/null; then ORDEN="${SUDO}pacman -Sy --needed --noconfirm ${FALTAN[*]}"
+  elif command -v zypper  >/dev/null; then ORDEN="${SUDO}zypper install -y ${FALTAN[*]}"
+  elif command -v apk     >/dev/null; then ORDEN="${SUDO}apk add --no-cache poppler-utils gawk chafa"
   elif command -v brew    >/dev/null; then ORDEN="brew install poppler gawk chafa"
   else echo "    No reconozco el gestor de paquetes. Instálalas a mano." >&2; exit 1
   fi
