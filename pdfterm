@@ -17,6 +17,8 @@ COLOR_TITULO=117
 COLOR_NUM=240
 GUIA=0            # guia de lectura por defecto, para libros sin estado propio
 GUIA_ESTILO=linea # linea = se pinta el renglon entero; marca = solo numero y flecha
+IMG_FORMATO=auto  # auto | sixels | kitty | iterm | symbols
+IMG_DPI=200       # resolucion a la que se extrae la pagina para dibujarla
 RATON=1           # el raton marca el renglon donde haces clic
 COLOR_MARCA=214   # color del renglon marcado
 [ -f "$RCF" ] && . "$RCF"
@@ -58,6 +60,21 @@ CABECERA=$CABECERA
 # normal (sin color, usa el del terminal), propio (usa los tres de abajo).
 TEMA=$TEMA
 
+# ---- Ilustraciones ---------------------------------------------------------
+
+# Como se dibujan las imagenes en la terminal. auto deja que chafa lo decida,
+# pero no siempre acierta: en Windows Terminal 1.22 o superior, kitty, WezTerm
+# e iTerm2 conviene forzar el formato para tener calidad de verdad.
+#   sixels   graficos reales, la mejor opcion si el terminal los soporta
+#   kitty    protocolo de kitty
+#   iterm    protocolo de iTerm2
+#   symbols  arte con caracteres, funciona en cualquier terminal pero se ve tosco
+IMG_FORMATO=$IMG_FORMATO
+
+# Resolucion en puntos por pulgada a la que se extrae la pagina antes de
+# dibujarla. Mas alto da mas detalle y tarda un poco mas.
+IMG_DPI=$IMG_DPI
+
 # Colores propios, solo se aplican con TEMA=propio.
 # Son números de la paleta de 256 del terminal. Para verlos todos:
 #   for i in \$(seq 0 255); do printf "\\e[38;5;\${i}m%3d \\e[0m" \$i; done; echo
@@ -88,7 +105,7 @@ RATON=$RATON
 COLOR_MARCA=$COLOR_MARCA
 EOF
 }
-grep -q '^GUIA_ESTILO=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
+grep -q '^IMG_FORMATO=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
 
 # --- pdfterm --config: abrir la configuración en el editor ------------------
 if [ "${1:-}" = "--config" ] || [ "${1:-}" = "-c" ]; then
@@ -102,10 +119,30 @@ command -v pdftotext >/dev/null || { echo "Falta poppler-utils"; exit 1; }
 
 ID=$(readlink -f "$F" | md5sum | cut -d' ' -f1)
 POSF="$CACHE/$ID.pos"; HDRF="$CACHE/$ID.hdr"; TXTF="$CACHE/$ID.txt"
+IMGF="$CACHE/$ID.img"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 LIBRO=$(basename "$F" | sed -E 's/\.[Pp][Dd][Ff]$//')
 
-AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i]magen · [+/-]inter [./,]parr [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir'
+AYUDA_IMG='[espacio]sig [p]ant [i]grande [I]lista [F]formato [h]cab [q]salir'
+AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i/I]magen [F]formato · [+/-]inter [./,]parr [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir'
+
+# Tamaño de la celda del terminal en pixeles. chafa lo necesita para dibujar a
+# tamaño real, pero ConPTY no lo informa por ioctl, asi que se le pregunta al
+# terminal con CSI 16 t. Si no contesta se usa 8x8, que es lo que chafa asume.
+CELDA_W=8; CELDA_H=8
+consultar_celda() {
+  local resp
+  [ -t 1 ] || return 1
+  printf '\033[16t' > /dev/tty 2>/dev/null || return 1
+  IFS= read -rsd t -t 0.3 resp < /dev/tty 2>/dev/null || return 1
+  resp="${resp#*[}"                       # "6;20;10"
+  case "$resp" in 6\;*) ;; *) return 1 ;; esac
+  resp="${resp#6;}"
+  local h="${resp%%;*}" w="${resp##*;}"
+  [[ "$w" =~ ^[0-9]+$ && "$h" =~ ^[0-9]+$ ]] || return 1
+  [ "$w" -gt 0 ] && [ "$h" -gt 0 ] || return 1
+  CELDA_W=$w; CELDA_H=$h
+}
 
 # tput protesta si no hay TERM (contenedores, cron); se asume un tamaño normal
 cols()   { tput cols  2>/dev/null || echo 80; }
@@ -154,13 +191,20 @@ filtrar() {
 }
 
 cabecera() {
-  local p=$1 ajustes
+  local p=$1 ajustes libro
+  libro=$(printf '%s' "$LIBRO" | cut -c1-38)
   if [ "$TIPO" = img ]; then
     ajustes="ilustración · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
   elif [ "$GUIA" -eq 1 ]; then
     ajustes="renglón $MARCA/$RENGLONES · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
   else
     ajustes="guía off · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
+  fi
+  # Con una ilustracion en pantalla, una sola linea para dejarle sitio
+  if [ "$TIPO" = img ] && [ "$CABECERA" != oculta ]; then
+    printf '\033[2m%s\033[0m\n' \
+      "$(printf '%s · pág %d/%d · ilustración' "$libro" "$p" "$TOTAL" | cut -c1-"$(( $(cols) - 1 ))")"
+    return
   fi
   case "$CABECERA" in
     oculta)   : ;;
@@ -202,14 +246,59 @@ formatear() {
     }'
 }
 
+# Ancho y alto de un PNG, leidos de su cabecera (bytes 16..23)
+dims_png() {
+  local b
+  b=$(od -An -tu1 -j16 -N8 "$1" 2>/dev/null) || return 1
+  set -- $b
+  [ $# -lt 8 ] && return 1
+  echo "$(( $1*16777216 + $2*65536 + $3*256 + $4 )) $(( $5*16777216 + $6*65536 + $7*256 + $8 ))"
+}
+
+# Dibuja la pagina como imagen. El segundo argumento es el alto disponible en
+# filas; si no se indica, se calcula descontando cabecera y barra de ayuda.
 render_img() {
   command -v chafa >/dev/null || { echo "  (instala chafa para ver las ilustraciones)"; return; }
-  pdftoppm -f "$1" -l "$1" -r 150 -png -singlefile "$F" "$TMP/pg" 2>/dev/null
-  chafa --size="$(cols)x$(( $(lineas) - 6 ))" "$TMP/pg.png" 2>/dev/null
+  local alto opts=() iw ih cw ancho medida
+  alto="${2:-$(( $(lineas) - $(alto_cabecera) - $(filas_ayuda) ))}"
+  [ "$alto" -lt 5 ] && alto=5
+  local grafico=1
+  case "$IMG_FORMATO" in
+    symbols) opts+=(-f symbols); grafico=0 ;;
+    auto)    ;;
+    *)       opts+=(-f "$IMG_FORMATO") ;;
+  esac
+  pdftoppm -f "$1" -l "$1" -r "$IMG_DPI" -png -singlefile "$F" "$TMP/pg" 2>/dev/null
+
+  cw=$(cols)
+  medida="${cw}x${alto}"
+
+  # Con los formatos graficos el area se calcula en pixeles, no en celdas:
+  #  - se parte del espacio real disponible (celdas x tamaño de celda)
+  #  - se ajusta al aspecto de la imagen, porque si se le da un area mas ancha
+  #    chafa rellena el resto de fondo y aparece una franja negra al lado
+  #  - se divide por 8 porque chafa cuenta 8 px por celda con --font-ratio=1/1
+  #    (medido en la salida sixel, no documentado)
+  # En modo symbols no aplica: dibuja con caracteres, no con pixeles.
+  local px_alto px_ancho w_px h_px
+  if [ "$grafico" -eq 1 ] && read -r iw ih < <(dims_png "$TMP/pg.png") \
+     && [ "${ih:-0}" -gt 0 ] && [ "${iw:-0}" -gt 0 ]; then
+    opts+=(--font-ratio=1/1)
+    px_alto=$(( alto * CELDA_H ))
+    px_ancho=$(( cw * CELDA_W ))
+    if [ $(( px_alto * iw / ih )) -le "$px_ancho" ]; then
+      w_px=$(( px_alto * iw / ih )); h_px=$px_alto
+    else
+      w_px=$px_ancho; h_px=$(( px_ancho * ih / iw ))
+    fi
+    medida="$(( w_px / 8 ))x$(( h_px / 8 ))"
+  fi
+  chafa "${opts[@]}" --size="$medida" "$TMP/pg.png" 2>/dev/null
 }
 
 # Cuantas lineas ocupa la cabecera, para descontarlas al traducir un clic
 alto_cabecera() {
+  if [ "${TIPO:-txt}" = img ] && [ "$CABECERA" != oculta ]; then echo 1; return; fi
   case "$CABECERA" in
     oculta) echo 0 ;; compacta) echo 1 ;; minima) echo 2 ;; *) echo 3 ;;
   esac
@@ -232,9 +321,11 @@ render() {
 
 # Alto util: la ventana menos la cabecera, la linea en blanco y el prompt.
 # Nunca se imprime mas que esto, asi el terminal no desplaza por su cuenta.
+ayuda_actual() { if [ "${TIPO:-txt}" = img ]; then printf '%s' "$AYUDA_IMG"; else printf '%s' "$AYUDA"; fi; }
+
 filas_ayuda() {
-  local c n
-  c=$(cols); n=${#AYUDA}
+  local c n a
+  a=$(ayuda_actual); c=$(cols); n=${#a}
   echo $(( (n + c - 1) / c ))
 }
 
@@ -337,6 +428,18 @@ fila_a_renglon() {
   return 1
 }
 
+# Paginas que contienen una ilustracion. Se filtra por tamaño porque muchos
+# PDF llevan logos o marcas de agua repetidos en todas las paginas: sin filtro
+# saldrian las 242. El umbral son 500x500 px de area.
+ilustraciones() {
+  if [ ! -s "$IMGF" ]; then
+    pdfimages -list "$F" 2>/dev/null \
+      | awk 'NR>2 && $1 ~ /^[0-9]+$/ && $4*$5 >= 250000 { print $1"\t"$4"x"$5 }' \
+      | sort -n -u -k1,1 > "$IMGF"
+  fi
+  cat "$IMGF"
+}
+
 buscar() {
   [ -f "$TXTF" ] || pdftotext -layout "$F" "$TXTF" 2>/dev/null
   awk -v RS='\f' -v q="$1" 'tolower($0) ~ tolower(q) { print NR }' "$TXTF" | head -20
@@ -382,12 +485,14 @@ pedir() {
 
 VISTA=1; ALTO=20; RENGLONES=0; LM=1; TIPO=txt
 paleta
+consultar_celda || true
 printf '\033[?1049h\033[2J\033[?25l'
 raton_on
 render
 while :; do
   mostrar; echo "$PAG $MARCA $GUIA" > "$POSF"
-  printf '\n\033[2m%s\033[0m' "$AYUDA"
+  if [ "$TIPO" = img ]; then printf '\033[2m%s\033[0m' "$(ayuda_actual)"
+  else printf '\n\033[2m%s\033[0m' "$(ayuda_actual)"; fi
   leer_tecla || break
   case "$TECLA" in
     ' '|n|derecha) [ "$PAG" -lt "$TOTAL" ] && { PAG=$((PAG+1)); MARCA=1; VISTA=1; render; } ;;
@@ -430,7 +535,31 @@ while :; do
     g)  pedir "Ir a la página > "
         [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
           && { PAG=$RESP; MARCA=1; VISTA=1; render; } ;;
-    i)  clear; render_img "$PAG"; pedir "Enter para volver > " ;;
+    i)  clear; render_img "$PAG" $(( $(lineas) - 2 )); pedir "Enter para volver > " ;;
+    F)  case "$IMG_FORMATO" in
+          auto)    IMG_FORMATO=sixels ;;
+          sixels)  IMG_FORMATO=kitty ;;
+          kitty)   IMG_FORMATO=iterm ;;
+          iterm)   IMG_FORMATO=symbols ;;
+          *)       IMG_FORMATO=auto ;;
+        esac
+        guardar_conf
+        clear; printf 'Formato de imagen: \033[1m%s\033[0m\n\n' "$IMG_FORMATO"
+        render_img "$PAG" $(( $(lineas) - 4 )); pedir $'\n''Enter para volver > ' ;;
+    I)  clear
+        res=$(ilustraciones)
+        if [ -z "$res" ]; then
+          pedir "Este PDF no tiene ilustraciones. Enter > "
+        else
+          printf '\033[1mPáginas con ilustración\033[0m  (%s en total)\n\n' "$(echo "$res" | wc -l)"
+          echo "$res" | awk -v c=4 '
+            { printf "  %4s \033[2m%-11s\033[0m", $1, $2
+              if (NR % c == 0) printf "\n" }
+            END { if (NR % c) printf "\n" }'
+          pedir $'\n''Ir a la página > '
+          [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
+            && { PAG=$RESP; MARCA=1; VISTA=1; render; }
+        fi ;;
     /)  pedir "Buscar > "
         if [ -n "$RESP" ]; then
           res=$(buscar "$RESP")
