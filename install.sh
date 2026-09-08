@@ -8,19 +8,22 @@
 #   Directamente desde internet, sin clonar nada:
 #     curl -fsSL https://raw.githubusercontent.com/JansenDev/pdfterm/main/install.sh | bash
 #
-# Instala las dependencias que falten sin preguntar. Con --ask pide
-# confirmacion antes de tocar nada.
+# Instala las dependencias que falten sin preguntar y añade el destino al PATH
+# de tu perfil si no estaba. Con --ask pide confirmacion antes de instalar
+# dependencias; con --no-path no toca el perfil.
 set -euo pipefail
 
 REPO="JansenDev/pdfterm"
 RAMA="main"
 DESTINO="$HOME/.local/bin"
 PREGUNTAR=0
+TOCAR_PATH=1
 
 for arg in "$@"; do
   case "$arg" in
     -g|--global) DESTINO="/usr/local/bin" ;;
     -i|--ask)    PREGUNTAR=1 ;;
+    --no-path)   TOCAR_PATH=0 ;;
     -y|--yes)    PREGUNTAR=0 ;;
     -h|--help)   sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   esac
@@ -106,11 +109,31 @@ echo "==> Instalando en $DESTINO"
 mkdir -p "$DESTINO"
 install -m 755 "$FUENTE" "$DESTINO/pdfterm"
 
+# Si el destino no esta en el PATH, se añade al perfil del shell para que la
+# instalacion quede completa sin pasos manuales.
+anadir_al_path() {
+  local rc
+  case "${SHELL:-}" in
+    */zsh)  rc="$HOME/.zshrc" ;;
+    */bash) rc="$HOME/.bashrc" ;;
+    *)      if [ -f "$HOME/.zshrc" ]; then rc="$HOME/.zshrc"; else rc="$HOME/.bashrc"; fi ;;
+  esac
+  if grep -qF "$DESTINO" "$rc" 2>/dev/null; then
+    echo "    $DESTINO ya figura en $rc; abre una terminal nueva"
+    return
+  fi
+  { printf '\n# pdfterm\n'; printf 'export PATH="%s:$PATH"\n' "$DESTINO"; } >> "$rc"
+  echo "    Añadido $DESTINO al PATH en $rc"
+  echo "    Para usarlo ya en esta terminal:  source $rc"
+}
+
 case ":$PATH:" in
   *":$DESTINO:"*) ;;
-  *) echo
-     echo "    AVISO: $DESTINO no está en tu PATH. Añade a tu ~/.bashrc o ~/.zshrc:"
-     echo "        export PATH=\"$DESTINO:\$PATH\"" ;;
+  *) if [ "$TOCAR_PATH" -eq 1 ]; then anadir_al_path
+     else
+       echo "    AVISO: $DESTINO no está en tu PATH. Añade a tu perfil:"
+       echo "        export PATH=\"$DESTINO:\$PATH\""
+     fi ;;
 esac
 
 echo

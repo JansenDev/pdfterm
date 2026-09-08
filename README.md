@@ -58,8 +58,8 @@ En una línea, en cualquier Linux o macOS:
 
 Comprueba las dependencias, instala las que falten con el gestor que encuentre
 (`apt`, `dnf`, `pacman`, `zypper`, `apk` o `brew`) y deja el programa en
-`~/.local/bin`. No pregunta nada; si no eres root, `sudo` pedirá tu contraseña
-para los paquetes.
+`~/.local/bin`, añadiéndolo a tu PATH si no estaba. No pregunta nada; si no
+eres root, `sudo` pedirá tu contraseña para los paquetes.
 
 En Debian, Ubuntu o WSL también puedes usar el paquete de la
 [última release](https://github.com/JansenDev/pdfterm/releases/latest):

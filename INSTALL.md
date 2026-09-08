@@ -40,8 +40,12 @@ Si no eres root, `sudo` pedirá tu contraseña para instalar los paquetes; el
 instalador avisa antes de llegar a ese punto. Para evitarlo del todo, ejecútalo
 con sudo o desde una sesión donde ya esté validado.
 
-Opciones: `-g` instala en `/usr/local/bin` para todo el sistema, e `--ask` pide
-confirmación antes de instalar dependencias.
+Si `~/.local/bin` no estaba en tu PATH, lo añade a tu `~/.bashrc` o `~/.zshrc`
+(sin duplicar la línea si ya estaba). Abre una terminal nueva, o haz
+`source ~/.bashrc`, y ya tendrás `pdfterm` disponible.
+
+Opciones: `-g` instala en `/usr/local/bin` para todo el sistema, `--ask` pide
+confirmación antes de instalar dependencias, y `--no-path` no toca tu perfil.
 
 ### 3. install.sh — cualquier Linux o macOS
 
