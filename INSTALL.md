@@ -110,6 +110,17 @@ No tiene capa de texto: es un escaneo. Hay que pasarle OCR primero:
     sudo apt install -y ocrmypdf tesseract-ocr-spa
     ocrmypdf -l spa original.pdf con_texto.pdf
 
+**No puedo seleccionar texto con el ratón**
+
+Es el comportamiento esperado: con la guía de lectura el programa captura los
+clics. Mantén Shift mientras arrastras, o pulsa `r` para devolverle el ratón al
+terminal. Para dejarlo apagado siempre, pon `RATON=0` en la configuración.
+
+**El clic no marca ningún renglón**
+
+La guía de lectura está apagada. Púlsala con `l`, o pon `GUIA=1` en la
+configuración.
+
 **Las cabeceras y pies no se eliminan bien**
 
 Se aprenden la primera vez que se abre cada libro y quedan cacheadas. Si el

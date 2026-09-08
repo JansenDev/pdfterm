@@ -3,6 +3,26 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [No publicado]
+
+### Añadido
+
+- Guía de lectura: un renglón resaltado que marca por dónde vas. Se mueve con
+  la rueda, con `j` y `k` o pinchando en el renglón, y la vista se desplaza
+  sola para mantenerlo visible. Se apaga y enciende con `l`; apagada, la rueda
+  desplaza la página entera.
+- Soporte de ratón por el protocolo SGR: clic para marcar y rueda para moverse.
+- La posición guardada incluye el renglón además de la página, así que al
+  reabrir un libro se vuelve al punto exacto.
+
+### Cambiado
+
+- Las teclas actúan al pulsarlas, sin necesidad de Enter.
+- La página se compone una sola vez y mover la guía solo repinta: de 86 ms a
+  3 ms por pulsación.
+- El repintado ya no borra la pantalla, así que desaparece el parpadeo, y el
+  lector trabaja en la pantalla alternativa del terminal.
+
 ## [1.1.1] - 2026-09-07
 
 ### Revertido

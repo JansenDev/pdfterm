@@ -3,11 +3,13 @@
 Lector de PDF para la terminal. Muestra el libro página a página como texto
 formateado, sin salir de la consola.
 
+- Guía de lectura: resalta el renglón por el que vas, lo mueves con la rueda
+  o con un clic, y sigue ahí cuando vuelves de una interrupción.
 - Reajusta los párrafos a una columna centrada del ancho que elijas.
 - Detecta y elimina solo las cabeceras y pies que se repiten en el documento.
 - Numera los renglones en el margen izquierdo.
 - Interlineado y separación entre párrafos configurables por separado.
-- Recuerda por qué página ibas en cada libro.
+- Recuerda por qué página y por qué renglón ibas en cada libro.
 - Dibuja en la terminal las páginas que son ilustraciones.
 - Busca texto en todo el documento y lista las páginas donde aparece.
 
