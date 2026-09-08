@@ -98,6 +98,10 @@ POSF="$CACHE/$ID.pos"; HDRF="$CACHE/$ID.hdr"; TXTF="$CACHE/$ID.txt"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 LIBRO=$(basename "$F" | sed -E 's/\.[Pp][Dd][Ff]$//')
 
+# tput protesta si no hay TERM (contenedores, cron); se asume un tamaño normal
+cols()   { tput cols  2>/dev/null || echo 80; }
+lineas() { tput lines 2>/dev/null || echo 24; }
+
 paleta() {
   case "$TEMA" in
     sepia)  C_TXT=$'\033[38;5;223m'; C_TIT=$'\033[1;38;5;215m'; C_NUM=$'\033[38;5;101m' ;;
@@ -147,14 +151,14 @@ cabecera() {
                      "$(printf '%s' "$LIBRO" | cut -c1-38)" "$p" "$TOTAL" "$ajustes" ;;
     *)        printf '\033[1m%s\033[0m\n' "$LIBRO"
               printf '\033[2mpágina %d de %d · %s\033[0m\n' "$p" "$TOTAL" "$ajustes"
-              printf '\033[2m%*s\033[0m\n' "$(tput cols)" '' | tr ' ' '_' ;;
+              printf '\033[2m%*s\033[0m\n' "$(cols)" '' | tr ' ' '_' ;;
   esac
 }
 
 formatear() {
   local prefw=0 marg
   [ "$NUM" -eq 1 ] && prefw=6
-  marg=$(( ( $(tput cols) - ANCHO - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
+  marg=$(( ( $(cols) - ANCHO - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
   awk '
     function flush() { if (length(buf)) { print buf; print ""; buf="" } }
     /^[[:space:]]*$/       { flush(); next }
@@ -183,7 +187,7 @@ formatear() {
 render_img() {
   command -v chafa >/dev/null || { echo "  (instala chafa para ver las ilustraciones)"; return; }
   pdftoppm -f "$1" -l "$1" -r 150 -png -singlefile "$F" "$TMP/pg" 2>/dev/null
-  chafa --size="$(tput cols)x$(( $(tput lines) - 6 ))" "$TMP/pg.png" 2>/dev/null
+  chafa --size="$(cols)x$(( $(lineas) - 6 ))" "$TMP/pg.png" 2>/dev/null
 }
 
 # Cuantas lineas ocupa la cabecera, para descontarlas al traducir un clic
@@ -211,7 +215,7 @@ render() {
 # Alto util: la ventana menos la cabecera, la linea en blanco y el prompt.
 # Nunca se imprime mas que esto, asi el terminal no desplaza por su cuenta.
 calcular_alto() {
-  ALTO=$(( $(tput lines) - $(alto_cabecera) - 2 ))
+  ALTO=$(( $(lineas) - $(alto_cabecera) - 2 ))
   [ "$ALTO" -lt 5 ] && ALTO=5
 }
 
