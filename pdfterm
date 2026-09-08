@@ -257,7 +257,11 @@ mostrar() {
       | awk -v lm="$([ "$GUIA" -eq 1 ] && echo "$LM" || echo 0)" \
             -v v="$VISTA" -v cm="$C_MRK" -v off="$C_OFF" '
           { if (v + NR - 1 == lm) {
-              gsub(/\033\[[0-9;]*m/, ""); sub(/│/, "▸"); print cm $0 off
+              gsub(/\033\[[0-9;]*m/, "")
+              # Con numeros se marca sustituyendo el separador; sin ellos hay
+              # que meter la flecha comiendose parte del margen izquierdo.
+              if (!sub(/│/, "▸")) { if (!sub(/^  /, "▸ ")) sub(/^/, "▸ ") }
+              print cm $0 off
             } else print }'
   } | sed 's/$/\x1b[K/' > "$TMP/vista"
   printf '\033[H'; cat "$TMP/vista"; printf '\033[J'
@@ -326,7 +330,7 @@ raton_on
 render
 while :; do
   mostrar; echo "$PAG $MARCA" > "$POSF"
-  printf '\n\033[2m[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [g]ir [/]buscar [i]magen · [+/-]inter [./,]parr [</>]ancho [#]num [t]ema [h]cab [r]raton [q]salir\033[0m'
+  printf '\n\033[2m[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [g]ir [/]buscar [i]magen · [+/-]inter [./,]parr [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir\033[0m'
   leer_tecla || break
   case "$TECLA" in
     ' '|n|derecha) [ "$PAG" -lt "$TOTAL" ] && { PAG=$((PAG+1)); MARCA=1; VISTA=1; render; } ;;
@@ -358,7 +362,7 @@ while :; do
     ,)  PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; guardar_conf; render ;;
     '>') ANCHO=$((ANCHO+4));    [ "$ANCHO" -gt 120 ] && ANCHO=120; guardar_conf; render ;;
     '<') ANCHO=$((ANCHO-4));    [ "$ANCHO" -lt 40 ]  && ANCHO=40;  guardar_conf; render ;;
-    '#') NUM=$(( 1 - NUM )); guardar_conf; render ;;
+    '#'|0) NUM=$(( 1 - NUM )); guardar_conf; render ;;
     t)  case "$TEMA" in suave) TEMA=sepia;; sepia) TEMA=normal;; normal) TEMA=propio;; *) TEMA=suave;; esac
         paleta; guardar_conf; render ;;
     h)  case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;

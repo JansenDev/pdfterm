@@ -62,7 +62,7 @@ A diferencia de la guía, esta preferencia sí se guarda.
 | `>` `<` | Ancho de la columna | 40 a 120, de 4 en 4 |
 | `+` `-` | Interlineado | 0 a 3 líneas |
 | `.` `,` | Separación entre párrafos | 0 a 6 líneas (total, no extra) |
-| `#` | Numeración de renglones | sí / no |
+| `#` o `0` | Numeración de renglones | sí / no |
 | `t` | Tema de color | suave → sepia → normal → propio |
 | `h` | Estilo de la cabecera | completa → compacta → mínima → oculta |
 

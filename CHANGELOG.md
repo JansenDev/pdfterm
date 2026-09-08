@@ -16,9 +16,16 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 - La posición guardada incluye el renglón además de la página, así que al
   reabrir un libro se vuelve al punto exacto.
 
+### Corregido
+
+- Con la numeración de renglones apagada, la guía de lectura perdía la flecha
+  y solo se distinguía por el color.
+
 ### Cambiado
 
 - Las teclas actúan al pulsarlas, sin necesidad de Enter.
+- La numeración de renglones se alterna también con `0`, además de con `#`,
+  que en teclado español obliga a usar AltGr.
 - La página se compone una sola vez y mover la guía solo repinta: de 86 ms a
   3 ms por pulsación.
 - El repintado ya no borra la pantalla, así que desaparece el parpadeo, y el
