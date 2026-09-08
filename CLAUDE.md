@@ -8,6 +8,7 @@ dependencias de lenguaje: todo el trabajo lo hacen `pdftotext`, `awk` y `fmt`.
     pdfterm            el programa entero (un solo script)
     install.sh         instalador multiplataforma (apt, dnf, pacman, zypper, brew)
     INSTALL.md         instalación detallada y resolución de problemas
+    SHORTCUTS.md       todos los atajos y funcionalidades
     uninstall.sh       desinstalador, con --purge para config y caché
     Makefile           install / uninstall / deb / clean
     debian/DEBIAN/     control del paquete .deb
@@ -79,6 +80,8 @@ parte los multibyte y ensucia la línea.
 - Bash puro. No introducir Python, Node ni ninguna otra dependencia de lenguaje.
 - **`gawk`, no `mawk`.** `mawk` no maneja UTF-8 y rompe los acentos y el patrón
   que resalta `Capítulo`, `Prólogo` y `Epílogo`. Está declarado en `Depends`.
+- Al añadir o cambiar una tecla, actualizar `SHORTCUTS.md` y la barra de ayuda
+  del propio lector, no solo el README.
 - Toda preferencia nueva debe: tener valor por defecto arriba del script,
   escribirse en `guardar_conf()` con su comentario explicativo, y ser
   ajustable con una tecla dentro del lector.

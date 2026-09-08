@@ -17,7 +17,7 @@ formateado, sin salir de la consola.
 
 En Debian, Ubuntu o WSL:
 
-    sudo apt install ./pdfterm_1.0.0_all.deb
+    sudo apt install ./pdfterm_1.1.1_all.deb
 
 En cualquier otro sistema:
 
@@ -33,22 +33,38 @@ Las dependencias, los demás métodos y la resolución de problemas están en
     pdfterm libro.pdf 61      # abre en la página 61
     pdfterm --config          # edita la configuración
 
-Los comandos se escriben y se confirman con Enter:
+Las teclas actúan al pulsarlas, sin Enter:
 
-| Tecla     | Acción                                       |
-|-----------|----------------------------------------------|
-| `Enter`   | Página siguiente                             |
-| `p`       | Página anterior                              |
-| `61`      | Ir a esa página                              |
-| `/texto`  | Buscar y listar las páginas con coincidencia |
-| `i`       | Ver la página actual como imagen             |
-| `+` `-`   | Interlineado                                 |
-| `.` `,`   | Separación entre párrafos                    |
-| `>` `<`   | Ancho de la columna                          |
-| `#`       | Numeración de renglones                      |
-| `t`       | Tema de color                                |
-| `h`       | Estilo de la cabecera                        |
-| `q`       | Salir                                        |
+| Tecla            | Acción                               |
+|------------------|--------------------------------------|
+| `espacio`, `→`   | Página siguiente                     |
+| `p`, `←`         | Página anterior                      |
+| `l`              | Encender o apagar la guía de lectura |
+| rueda, `j` `k`   | Mover la guía, o desplazar la página |
+| clic izquierdo   | Poner la guía en ese renglón         |
+| `g`              | Ir a una página concreta             |
+| `/`              | Buscar texto en el libro             |
+| `q`              | Salir                                |
+
+La lista completa, con los ajustes de formato y qué se guarda de una sesión a
+otra, está en [SHORTCUTS.md](SHORTCUTS.md).
+
+## Guía de lectura
+
+Con la guía encendida hay siempre un renglón resaltado con `▸`, que marca por
+dónde vas. Se mueve con la rueda, con `j` y `k` o pinchando directamente en el
+renglón, y la vista se desplaza sola para que nunca se pierda de vista. Si te
+interrumpen, al volver sigue ahí; y como se guarda junto con la página, al
+reabrir el libro vuelves al renglón exacto, no solo a la hoja.
+
+Cada libro se abre con la guía **apagada**: no hay renglón resaltado y la rueda
+desplaza la página entera, como en cualquier visor. Se enciende con `l`, y una
+vez encendida se mantiene mientras pasas páginas, hasta que cierras el lector.
+Al encenderla se coloca en el primer renglón visible, no en el que dejaste hace
+rato.
+
+Mientras el ratón está capturado, para seleccionar texto hay que mantener
+Shift al arrastrar. La tecla `r` se lo devuelve al terminal.
 
 ## Configuración
 
