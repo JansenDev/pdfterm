@@ -44,7 +44,8 @@ completo de la ventana, y si apartas la vista un momento pierdes el renglón.
   con la rueda del ratón, con `j` y `k` o pinchando directamente en él, y la
   vista se desplaza sola para mantenerlo visible. Si te interrumpen, al volver
   sigue ahí.
-- **Recuerda dónde lo dejaste**, por libro y hasta el renglón exacto.
+- **Recuerda dónde lo dejaste**, por libro y hasta el renglón exacto, junto con
+  si tenías la guía encendida.
 - **Dibuja las ilustraciones** en la propia terminal, con `chafa`.
 - **Busca en todo el libro** y lista las páginas donde aparece lo que buscas.
 - **Se ajusta mientras lees.** Ancho, interlineado, párrafos, numeración, tema
@@ -64,7 +65,7 @@ eres root, `sudo` pedirá tu contraseña para los paquetes.
 En Debian, Ubuntu o WSL también puedes usar el paquete de la
 [última release](https://github.com/JansenDev/pdfterm/releases/latest):
 
-    sudo apt install ./pdfterm_1.2.0_all.deb
+    sudo apt install ./pdfterm_1.3.0_all.deb
 
 Los demás métodos y la resolución de problemas están en [INSTALL.md](INSTALL.md).
 
@@ -91,10 +92,13 @@ La lista completa está en [SHORTCUTS.md](SHORTCUTS.md).
 
 ## Guía de lectura
 
-Cada libro se abre con la guía **apagada**: la rueda desplaza la página entera,
-como en cualquier visor. Se enciende con `l`, y entonces aparece el renglón
-marcado con `▸`; la vista lo acompaña para que nunca quede fuera de pantalla.
-Se mantiene mientras pasas páginas y se olvida al cerrar.
+Se enciende con `l` y aparece el renglón marcado con `▸`; la vista lo acompaña
+para que nunca quede fuera de pantalla. Apagada, la rueda desplaza la página
+entera, como en cualquier visor.
+
+**Cada libro recuerda su guía**, así que puedes leer una novela con ella y un
+manual sin ella. Con `L` eliges cómo se resalta: el renglón entero, o solo el
+número y la flecha si prefieres que el texto no cambie de color.
 
 Mientras el ratón está capturado, para seleccionar texto hay que mantener Shift
 al arrastrar. La tecla `r` se lo devuelve al terminal.

@@ -46,10 +46,21 @@ La vista es una ventana deslizante sobre la página: `VISTA` es la primera líne
 mostrada y `seguir_marca()` la ajusta lo justo para que la guía siga visible.
 Con la guía apagada (`GUIA=0`) manda `scroll_vista()` y no se resalta nada.
 
-`GUIA` es estado de sesión, no una preferencia: se fuerza a 0 después de cargar
-la configuración, así que cada libro se abre con la guía apagada, y lo que se
-decida dentro se mantiene al pasar páginas pero no se guarda al salir. No
-añadirla a `guardar_conf()`.
+`GUIA` se guarda en dos sitios: como valor por defecto en el config, y por
+libro en el tercer campo del fichero `.pos` (`página renglón guía`). El del
+libro manda sobre el global; los `.pos` antiguos de dos campos siguen leyéndose
+y toman el global. Pulsar `l` actualiza los dos.
+
+`GUIA_ESTILO` decide si se resalta el renglón entero (`linea`) o solo el número
+y la flecha (`marca`). El resaltado se aplica en `mostrar()`, sobre la página ya
+compuesta, nunca en `formatear()`: rehacer la página al mover la guía costaba
+86 ms.
+
+Cuidado con la flecha cuando la numeración está apagada. No hay `│` que
+sustituir, así que se coloca **al final del margen izquierdo, ocupando el sitio
+de dos espacios**. Si se antepone, empuja el texto y el renglón marcado queda
+desalineado; si se mete al principio del margen, en ventanas anchas acaba
+pegada al borde y lejos del texto. Ver la función `flecha()`.
 
 ## Rendimiento: no rehacer lo que no cambia
 
@@ -64,16 +75,22 @@ Dos reglas que no son evidentes al leer el código y que costó descubrir:
   se ve como parpadeo. El lector trabaja en la pantalla alternativa
   (`\033[?1049h`) para no ensuciar el historial del terminal.
 
-## Problema conocido
+## La barra de ayuda y el alto disponible
 
-Las líneas de la cabecera pueden ocupar la fila entera del terminal, y la barra
-de ayuda inferior mide unos 150 caracteres. En ventanas estrechas ambas hacen
-*wrap*, ocupan una fila de más y descuadran el repintado: se nota como que la
-cabecera se redibuja mal al desplazarse. Hubo un intento de arreglarlo
-recortando ambas al ancho disponible, pero se revirtió porque acortaba la barra
-de ayuda y el usuario prefiere verla entera. Si se retoma, hay que recortar sin
-perder teclas de la barra, y recortar por caracteres y no por bytes: `cut -c`
-parte los multibyte y ensucia la línea.
+La barra de ayuda mide unos 160 caracteres y en la mayoría de ventanas ocupa
+**dos filas**. `filas_ayuda()` calcula cuántas hace falta según el ancho, y
+`calcular_alto()` las descuenta. Reservar solo una hacía que se escribiera una
+fila de más, el terminal desplazaba y el repintado se veía como un rebote,
+sobre todo al llegar a los extremos de la página, donde el texto ya no cambia.
+
+Si se alarga la barra, no hay que tocar nada más: el cálculo se adapta solo.
+Lo que **no** hay que hacer es acortarla para que quepa en una fila; se probó y
+el usuario prefiere verla entera.
+
+Las líneas de la cabecera sí pueden ocupar la fila completa del terminal en
+ventanas estrechas y descuadrar el repintado. Hubo un arreglo que se revirtió
+porque venía junto con el acortado de la barra. Si se retoma, recortar por
+caracteres y no por bytes: `cut -c` parte los multibyte y ensucia la línea.
 
 ## Convenciones
 

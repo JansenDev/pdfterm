@@ -3,6 +3,35 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.3.0] - 2026-09-08
+
+### Añadido
+
+- Instalación en una línea con `curl`, sin clonar el repositorio. Instala las
+  dependencias que falten con el gestor del sistema y añade el destino al PATH,
+  sin preguntar nada.
+- La guía de lectura se recuerda por libro, en el fichero de posición, y como
+  valor por defecto en la configuración.
+- Estilo de la guía (tecla `L`): `linea` resalta el renglón entero, `marca`
+  solo el número y la flecha.
+- La numeración de renglones se alterna también con `0`, además de con `#`.
+- Licencia MIT.
+
+### Corregido
+
+- Rebote al desplazarse: la barra de ayuda ocupa dos filas en la mayoría de
+  ventanas y solo se reservaba una, así que el terminal desplazaba en cada
+  repintado. Ahora se calcula cuántas filas ocupa realmente.
+- Al apagar y encender la guía, saltaba al primer renglón visible aunque no te
+  hubieras movido. Ahora conserva el renglón si sigue a la vista.
+- Con la numeración apagada, la flecha de la guía empujaba el texto y
+  desalineaba el renglón marcado.
+- Con la numeración apagada, la guía perdía la flecha y solo se distinguía por
+  el color.
+- Las páginas que son ilustraciones mostraban `renglón 1/0` en la cabecera.
+- El instalador fallaba en sistemas sin `sudo`, como los contenedores.
+- `tput` protestaba cuando no había `TERM` definido.
+
 ## [1.2.0] - 2026-09-08
 
 ### Añadido

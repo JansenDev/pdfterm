@@ -33,6 +33,7 @@ búsqueda tarda un par de segundos porque extrae todo el texto, y queda cacheada
 | Tecla | Efecto |
 |---|---|
 | `l` | Encender o apagar la guía |
+| `L` | Estilo: renglón entero o solo el indicador |
 | `j`, `↓` | Bajar un renglón (o desplazar la página si está apagada) |
 | `k`, `↑` | Subir un renglón (o desplazar la página si está apagada) |
 | clic izquierdo | Poner la guía en ese renglón |
@@ -42,8 +43,16 @@ Encendida, el renglón activo se marca con `▸` y la vista se desplaza sola par
 que nunca quede fuera de pantalla. Apagada, la rueda desplaza tres líneas por
 giro y no hay nada resaltado.
 
-**Cada libro se abre con la guía apagada.** Lo que decidas dentro se mantiene
-mientras pasas páginas, pero no se guarda al salir.
+**Cada libro recuerda su guía.** Si la enciendes en un libro, ese libro la abre
+encendida la próxima vez; los demás mantienen la suya. Un libro que abres por
+primera vez hereda el valor por defecto del fichero de configuración, que
+también se actualiza al pulsar `l`.
+
+Con `L` se cambia cómo se resalta el renglón:
+
+- **linea**: el renglón entero toma el color de la marca.
+- **marca**: solo el número y la flecha; el texto conserva su color, más
+  discreto para lecturas largas.
 
 ## Ratón
 
@@ -84,9 +93,9 @@ solas, sin pulsar nada. Necesita `chafa`; sin él, el resto sigue funcionando.
 
 | | Dónde | Cuándo |
 |---|---|---|
-| Página y renglón | `~/.local/share/pdfterm/` | Uno por libro, al momento |
+| Página, renglón y guía | `~/.local/share/pdfterm/` | Uno por libro, al momento |
 | Ancho, interlineado, párrafos, números, tema, cabecera, ratón | `~/.config/pdfterm/config` | Al pulsar la tecla |
-| Guía de lectura encendida | En ninguna parte | Se olvida al salir, a propósito |
+| Guía encendida y su estilo | Las dos: por libro en `~/.local/share/pdfterm/` y como valor por defecto en el config | Al pulsar `l` o `L` |
 | Cabeceras y pies detectados | `~/.local/share/pdfterm/` | La primera vez que abres cada libro |
 | Texto completo para buscar | `~/.local/share/pdfterm/` | La primera vez que buscas en ese libro |
 
