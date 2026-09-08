@@ -118,8 +118,8 @@ terminal. Para dejarlo apagado siempre, pon `RATON=0` en la configuración.
 
 **El clic no marca ningún renglón**
 
-La guía de lectura está apagada. Púlsala con `l`, o pon `GUIA=1` en la
-configuración.
+La guía de lectura está apagada, que es como arranca siempre. Enciéndela con
+`l`. No se guarda entre sesiones a propósito: cada libro se abre sin ella.
 
 **Las cabeceras y pies no se eliminan bien**
 

@@ -10,7 +10,8 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 - Guía de lectura: un renglón resaltado que marca por dónde vas. Se mueve con
   la rueda, con `j` y `k` o pinchando en el renglón, y la vista se desplaza
   sola para mantenerlo visible. Se apaga y enciende con `l`; apagada, la rueda
-  desplaza la página entera.
+  desplaza la página entera. Cada libro se abre con la guía apagada, y lo que
+  se decida dentro se mantiene mientras se pasan páginas.
 - Soporte de ratón por el protocolo SGR: clic para marcar y rueda para moverse.
 - La posición guardada incluye el renglón además de la página, así que al
   reabrir un libro se vuelve al punto exacto.

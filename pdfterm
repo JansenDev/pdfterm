@@ -15,10 +15,10 @@ CABECERA=completa # completa | compacta | minima | oculta
 COLOR_TEXTO=252   # solo si TEMA=propio
 COLOR_TITULO=117
 COLOR_NUM=240
-GUIA=1            # guia de lectura: resalta el renglon por el que vas
 RATON=1           # el raton marca el renglon donde haces clic
 COLOR_MARCA=214   # color del renglon marcado
 [ -f "$RCF" ] && . "$RCF"
+GUIA=0            # cada libro se abre con la guia apagada
 
 guardar_conf() {
   cat > "$RCF" <<EOF
@@ -66,11 +66,9 @@ COLOR_NUM=$COLOR_NUM
 
 # ---- Seguimiento de lectura ------------------------------------------------
 
-# Guia de lectura. 1 = se resalta el renglon por el que vas y la rueda, las
-# flechas y el clic lo mueven, desplazando la vista para que siga visible.
-# 0 = no hay renglon resaltado y la rueda desplaza la pagina libremente.
-# Se alterna con la tecla l.
-GUIA=$GUIA
+# La guia de lectura (tecla l) no se guarda aqui a proposito: cada libro se
+# abre siempre con la guia apagada, y lo que decidas dentro se mantiene
+# mientras pasas paginas, hasta que cierras.
 
 
 # Marca de lectura con el raton. 1 = un clic marca el renglon donde pinchas,
@@ -83,7 +81,7 @@ RATON=$RATON
 COLOR_MARCA=$COLOR_MARCA
 EOF
 }
-grep -q '^GUIA=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
+grep -q '^COLOR_MARCA=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
 
 # --- pdfterm --config: abrir la configuración en el editor ------------------
 if [ "${1:-}" = "--config" ] || [ "${1:-}" = "-c" ]; then
@@ -339,7 +337,7 @@ while :; do
     k|arriba) if [ "$GUIA" -eq 1 ]; then
                 [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
               else scroll_vista -1; fi ;;
-    l)  GUIA=$(( 1 - GUIA )); guardar_conf
+    l)  GUIA=$(( 1 - GUIA ))
         [ "$GUIA" -eq 1 ] && guia_al_primer_visible ;;
     raton)
       case "$MB" in

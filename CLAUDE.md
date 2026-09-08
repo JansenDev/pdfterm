@@ -44,6 +44,11 @@ La vista es una ventana deslizante sobre la página: `VISTA` es la primera líne
 mostrada y `seguir_marca()` la ajusta lo justo para que la guía siga visible.
 Con la guía apagada (`GUIA=0`) manda `scroll_vista()` y no se resalta nada.
 
+`GUIA` es estado de sesión, no una preferencia: se fuerza a 0 después de cargar
+la configuración, así que cada libro se abre con la guía apagada, y lo que se
+decida dentro se mantiene al pasar páginas pero no se guarda al salir. No
+añadirla a `guardar_conf()`.
+
 ## Rendimiento: no rehacer lo que no cambia
 
 Dos reglas que no son evidentes al leer el código y que costó descubrir:
