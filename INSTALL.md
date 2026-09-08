@@ -28,7 +28,27 @@ El más simple: `apt` resuelve las dependencias solo.
 
 Instala en `/usr/bin/pdfterm`, disponible para todos los usuarios.
 
-### 2. install.sh — cualquier Linux o macOS
+### 2. En una línea, sin clonar nada
+
+Si el repositorio es público:
+
+    curl -fsSL https://raw.githubusercontent.com/JansenDev/pdfterm/main/install.sh | bash
+
+Como es privado, hace falta un token con permiso de lectura. Con `gh` instalado
+y autenticado en la máquina destino:
+
+    GITHUB_TOKEN=$(gh auth token) bash -c "$(curl -fsSL -H "Authorization: token $(gh auth token)" https://raw.githubusercontent.com/JansenDev/pdfterm/main/install.sh)"
+
+El instalador comprueba las dependencias, las instala con el gestor que
+encuentre, descarga el programa y lo deja en `~/.local/bin`. Acepta las mismas
+opciones que abajo: `-g` para instalar en todo el sistema y `-y` para no
+preguntar.
+
+Al ejecutarse por una tubería no puede usar la entrada estándar para preguntar
+—la ocupa el propio script—, así que pregunta contra el terminal. En un entorno
+sin terminal, como un Dockerfile o un CI, hay que pasarle `-y`.
+
+### 3. install.sh — cualquier Linux o macOS
 
     git clone https://github.com/JansenDev/pdfterm.git
     cd pdfterm
@@ -42,14 +62,14 @@ Para todo el sistema:
 
     sudo ./install.sh -g      # instala en /usr/local/bin
 
-### 3. Makefile
+### 4. Makefile
 
 Si prefieres controlar dónde va, sin que se instale ninguna dependencia:
 
     make install                    # en ~/.local/bin
     make install PREFIX=/usr/local  # en /usr/local/bin
 
-### 4. A mano
+### 5. A mano
 
 Es un único script sin compilar:
 

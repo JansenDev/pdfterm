@@ -1,52 +1,105 @@
 #!/usr/bin/env bash
-# Instalador de pdfterm. Uso:
-#   ./install.sh            instala en ~/.local/bin (no necesita root)
-#   sudo ./install.sh -g    instala en /usr/local/bin para todo el sistema
+# Instalador de pdfterm. Funciona de dos maneras:
+#
+#   Desde el repositorio ya clonado:
+#     ./install.sh              instala en ~/.local/bin
+#     sudo ./install.sh -g      instala en /usr/local/bin
+#
+#   Directamente desde internet, sin clonar nada:
+#     curl -fsSL https://raw.githubusercontent.com/JansenDev/pdfterm/main/install.sh | bash
+#
+# Si el repositorio es privado hace falta un token con permiso de lectura,
+# en la variable GITHUB_TOKEN o a través de gh:
+#     GITHUB_TOKEN=$(gh auth token) bash -c "$(curl -fsSL ...)"
 set -euo pipefail
 
+REPO="JansenDev/pdfterm"
+RAMA="main"
 DESTINO="$HOME/.local/bin"
-[ "${1:-}" = "-g" ] && DESTINO="/usr/local/bin"
-ORIGEN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ASUMIR_SI=0
+
+for arg in "$@"; do
+  case "$arg" in
+    -g|--global) DESTINO="/usr/local/bin" ;;
+    -y|--yes)    ASUMIR_SI=1 ;;
+    -h|--help)   sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  esac
+done
+
+# Al ejecutarse por una tubería, la entrada estándar es el propio script:
+# las preguntas hay que hacerlas contra el terminal.
+preguntar() {
+  local r
+  [ "$ASUMIR_SI" -eq 1 ] && return 0
+  if [ -e /dev/tty ] && [ -r /dev/tty ]; then
+    printf '    %s [S/n] ' "$1" > /dev/tty
+    read -r r < /dev/tty || r=""
+  else
+    echo "    Sin terminal para preguntar; usa -y para aceptar sin confirmar." >&2
+    return 1
+  fi
+  case "$r" in [nN]*) return 1 ;; *) return 0 ;; esac
+}
 
 echo "==> Comprobando dependencias"
 FALTAN=()
 for c in pdftotext pdfinfo pdftoppm; do
-  command -v "$c" >/dev/null || FALTAN+=("poppler-utils")
+  command -v "$c" >/dev/null || { FALTAN+=("poppler-utils"); break; }
 done
 command -v gawk >/dev/null || FALTAN+=("gawk")
-command -v chafa >/dev/null || echo "    chafa no está (opcional: sin él no se ven las ilustraciones)"
-
-# Quita duplicados
-FALTAN=($(printf '%s\n' "${FALTAN[@]:-}" | sort -u | grep -v '^$' || true))
+command -v chafa >/dev/null || FALTAN+=("chafa")
 
 if [ "${#FALTAN[@]}" -gt 0 ]; then
   echo "    Faltan: ${FALTAN[*]}"
-  if   command -v apt-get >/dev/null; then INSTALAR="sudo apt-get install -y ${FALTAN[*]}"
-  elif command -v dnf     >/dev/null; then INSTALAR="sudo dnf install -y ${FALTAN[*]}"
-  elif command -v pacman  >/dev/null; then INSTALAR="sudo pacman -S --needed ${FALTAN[*]}"
-  elif command -v zypper  >/dev/null; then INSTALAR="sudo zypper install -y ${FALTAN[*]}"
-  elif command -v brew    >/dev/null; then INSTALAR="brew install poppler gawk"
-  else echo "    No reconozco el gestor de paquetes. Instálalas a mano."; exit 1
+  if   command -v apt-get >/dev/null; then ORDEN="sudo apt-get install -y ${FALTAN[*]}"
+  elif command -v dnf     >/dev/null; then ORDEN="sudo dnf install -y ${FALTAN[*]}"
+  elif command -v pacman  >/dev/null; then ORDEN="sudo pacman -S --needed --noconfirm ${FALTAN[*]}"
+  elif command -v zypper  >/dev/null; then ORDEN="sudo zypper install -y ${FALTAN[*]}"
+  elif command -v apk     >/dev/null; then ORDEN="sudo apk add poppler-utils gawk chafa"
+  elif command -v brew    >/dev/null; then ORDEN="brew install poppler gawk chafa"
+  else echo "    No reconozco el gestor de paquetes. Instálalas a mano." >&2; exit 1
   fi
-  echo "    Voy a ejecutar: $INSTALAR"
-  read -rp "    ¿Continuo? [S/n] " r
-  case "$r" in [nN]*) echo "    Cancelado."; exit 1 ;; esac
-  eval "$INSTALAR"
+  echo "    Voy a ejecutar: $ORDEN"
+  preguntar "¿Continúo?" || { echo "    Cancelado."; exit 1; }
+  eval "$ORDEN"
 else
   echo "    Todo en orden"
 fi
 
+# El script puede estar al lado (repositorio clonado) o haber que bajarlo
+ORIGEN="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd || echo .)"
+TMP=""
+if [ -f "$ORIGEN/pdfterm" ]; then
+  FUENTE="$ORIGEN/pdfterm"
+  echo "==> Usando el pdfterm de $ORIGEN"
+else
+  echo "==> Descargando pdfterm de $REPO"
+  TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+  URL="https://raw.githubusercontent.com/$REPO/$RAMA/pdfterm"
+  CABECERA=()
+  [ -n "${GITHUB_TOKEN:-}" ] && CABECERA=(-H "Authorization: token $GITHUB_TOKEN")
+  if ! curl -fsSL "${CABECERA[@]}" -o "$TMP/pdfterm" "$URL"; then
+    echo "    No se pudo descargar." >&2
+    echo "    Si el repositorio es privado, pasa un token:" >&2
+    echo "        GITHUB_TOKEN=\$(gh auth token) bash -c \"\$(curl -fsSL ... )\"" >&2
+    exit 1
+  fi
+  head -1 "$TMP/pdfterm" | grep -q '^#!' || { echo "    Lo descargado no es el script." >&2; exit 1; }
+  FUENTE="$TMP/pdfterm"
+fi
+
 echo "==> Instalando en $DESTINO"
 mkdir -p "$DESTINO"
-install -m 755 "$ORIGEN/pdfterm" "$DESTINO/pdfterm"
+install -m 755 "$FUENTE" "$DESTINO/pdfterm"
 
 case ":$PATH:" in
   *":$DESTINO:"*) ;;
   *) echo
-     echo "    AVISO: $DESTINO no está en tu PATH. Añade esta línea a tu ~/.bashrc o ~/.zshrc:"
+     echo "    AVISO: $DESTINO no está en tu PATH. Añade a tu ~/.bashrc o ~/.zshrc:"
      echo "        export PATH=\"$DESTINO:\$PATH\"" ;;
 esac
 
 echo
-echo "Listo. Prueba con:  pdfterm archivo.pdf"
-echo "Configuración:      pdfterm --config"
+echo "Listo. pdfterm instalado en $DESTINO"
+echo "Uso:           pdfterm libro.pdf"
+echo "Configuración: pdfterm --config"

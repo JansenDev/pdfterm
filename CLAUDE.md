@@ -9,6 +9,7 @@ dependencias de lenguaje: todo el trabajo lo hacen `pdftotext`, `awk` y `fmt`.
     install.sh         instalador multiplataforma (apt, dnf, pacman, zypper, brew)
     INSTALL.md         instalación detallada y resolución de problemas
     SHORTCUTS.md       todos los atajos y funcionalidades
+    LICENSE            MIT
     uninstall.sh       desinstalador, con --purge para config y caché
     Makefile           install / uninstall / deb / clean
     debian/DEBIAN/     control del paquete .deb

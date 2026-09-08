@@ -5,7 +5,7 @@ Priority: optional
 Architecture: all
 Depends: poppler-utils, gawk, coreutils, sed, grep, ncurses-bin
 Recommends: chafa
-Maintainer: janssen <bkmcfree@hotmail.com>
+Maintainer: Jhonatan Segura <seguragjj25.2@gmail.com>
 Description: Lector de PDF para la terminal
  Muestra un PDF pagina a pagina como texto formateado, con ancho de columna,
  interlineado y separacion de parrafos configurables. Detecta y elimina las
