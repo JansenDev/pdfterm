@@ -15,6 +15,7 @@ CABECERA=completa # completa | compacta | minima | oculta
 COLOR_TEXTO=252   # solo si TEMA=propio
 COLOR_TITULO=117
 COLOR_NUM=240
+GUIA=1            # guia de lectura: resalta el renglon por el que vas
 RATON=1           # el raton marca el renglon donde haces clic
 COLOR_MARCA=214   # color del renglon marcado
 [ -f "$RCF" ] && . "$RCF"
@@ -65,6 +66,13 @@ COLOR_NUM=$COLOR_NUM
 
 # ---- Seguimiento de lectura ------------------------------------------------
 
+# Guia de lectura. 1 = se resalta el renglon por el que vas y la rueda, las
+# flechas y el clic lo mueven, desplazando la vista para que siga visible.
+# 0 = no hay renglon resaltado y la rueda desplaza la pagina libremente.
+# Se alterna con la tecla l.
+GUIA=$GUIA
+
+
 # Marca de lectura con el raton. 1 = un clic marca el renglon donde pinchas,
 # 0 = el raton se comporta como siempre y puedes seleccionar texto.
 # Dentro del lector se alterna con la tecla r; con el raton activo, para
@@ -75,7 +83,7 @@ RATON=$RATON
 COLOR_MARCA=$COLOR_MARCA
 EOF
 }
-grep -q '^RATON=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
+grep -q '^GUIA=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
 
 # --- pdfterm --config: abrir la configuración en el editor ------------------
 if [ "${1:-}" = "--config" ] || [ "${1:-}" = "-c" ]; then
@@ -129,7 +137,11 @@ filtrar() {
 
 cabecera() {
   local p=$1 ajustes
-  ajustes="renglón $MARCA/$RENGLONES · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
+  if [ "$GUIA" -eq 1 ]; then
+    ajustes="renglón $MARCA/$RENGLONES · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
+  else
+    ajustes="guía off · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
+  fi
   case "$CABECERA" in
     oculta)   : ;;
     minima)   printf '\033[2m%s · %d/%d\033[0m\n\n' "$LIBRO" "$p" "$TOTAL" ;;
@@ -187,14 +199,15 @@ render() {
   local txt
   txt=$(pdftotext -layout -f "$PAG" -l "$PAG" "$F" - 2>/dev/null | filtrar | sed '/^[[:space:]]*$/d')
   if [ "${#txt}" -lt 120 ]; then
-    TIPO=img; : > "$TMP/pagina"; : > "$TMP/mapa"; RENGLONES=0
+    TIPO=img; : > "$TMP/pagina"; : > "$TMP/mapa"; RENGLONES=0; TOTLIN=0
   else
     TIPO=txt
     printf '%s\n' "$txt" | formatear > "$TMP/pagina"
     RENGLONES=$(sort -n "$TMP/mapa" | tail -1); [ -z "$RENGLONES" ] && RENGLONES=0
+    TOTLIN=$(wc -l < "$TMP/pagina")
   fi
   [ "$MARCA" -gt "$RENGLONES" ] && { MARCA=$RENGLONES; [ "$MARCA" -lt 1 ] && MARCA=1; }
-  seguir_marca
+  if [ "$GUIA" -eq 1 ]; then seguir_marca; else scroll_vista 0; fi
 }
 
 # Alto util: la ventana menos la cabecera, la linea en blanco y el prompt.
@@ -218,6 +231,24 @@ seguir_marca() {
   [ "$VISTA" -lt 1 ] && VISTA=1
 }
 
+# Desplaza la vista tantas lineas como se indique, sin salirse de la pagina
+scroll_vista() {
+  local tope
+  calcular_alto
+  tope=$(( TOTLIN - ALTO + 1 )); [ "$tope" -lt 1 ] && tope=1
+  VISTA=$(( VISTA + $1 ))
+  [ "$VISTA" -gt "$tope" ] && VISTA=$tope
+  [ "$VISTA" -lt 1 ] && VISTA=1
+}
+
+# Al encender la guia, se coloca en el primer renglon visible de la vista
+guia_al_primer_visible() {
+  local n
+  n=$(sed -n "${VISTA},\$p" "$TMP/mapa" | grep -m1 -v '^0$')
+  [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -gt 0 ] && MARCA=$n
+  seguir_marca
+}
+
 mostrar() {
   if [ "$TIPO" = img ]; then
     clear; cabecera "$PAG"; render_img "$PAG"; return
@@ -225,7 +256,8 @@ mostrar() {
   calcular_alto
   { cabecera "$PAG"
     sed -n "${VISTA},$(( VISTA + ALTO - 1 ))p" "$TMP/pagina" \
-      | awk -v lm="$LM" -v v="$VISTA" -v cm="$C_MRK" -v off="$C_OFF" '
+      | awk -v lm="$([ "$GUIA" -eq 1 ] && echo "$LM" || echo 0)" \
+            -v v="$VISTA" -v cm="$C_MRK" -v off="$C_OFF" '
           { if (v + NR - 1 == lm) {
               gsub(/\033\[[0-9;]*m/, ""); sub(/│/, "▸"); print cm $0 off
             } else print }'
@@ -296,18 +328,29 @@ raton_on
 render
 while :; do
   mostrar; echo "$PAG $MARCA" > "$POSF"
-  printf '\n\033[2m[espacio]sig [p]ant [j/k o rueda]marca [clic]marcar [g]ir [/]buscar [i]magen · [+/-]inter [./,]parr [</>]ancho [#]num [t]ema [h]cab [r]raton [q]salir\033[0m'
+  printf '\n\033[2m[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [g]ir [/]buscar [i]magen · [+/-]inter [./,]parr [</>]ancho [#]num [t]ema [h]cab [r]raton [q]salir\033[0m'
   leer_tecla || break
   case "$TECLA" in
     ' '|n|derecha) [ "$PAG" -lt "$TOTAL" ] && { PAG=$((PAG+1)); MARCA=1; VISTA=1; render; } ;;
     p|izquierda)   [ "$PAG" -gt 1 ]        && { PAG=$((PAG-1)); MARCA=1; VISTA=1; render; } ;;
-    j|abajo)       [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; } ;;
-    k|arriba)      [ "$MARCA" -gt 1 ]            && { MARCA=$((MARCA-1)); seguir_marca; } ;;
+    j|abajo)  if [ "$GUIA" -eq 1 ]; then
+                [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; }
+              else scroll_vista 1; fi ;;
+    k|arriba) if [ "$GUIA" -eq 1 ]; then
+                [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
+              else scroll_vista -1; fi ;;
+    l)  GUIA=$(( 1 - GUIA )); guardar_conf
+        [ "$GUIA" -eq 1 ] && guia_al_primer_visible ;;
     raton)
       case "$MB" in
-        0)  [ "$MT" = "M" ] && { r=$(fila_a_renglon "$MY") && { MARCA=$r; seguir_marca; }; } ;;
-        64) [ "$MARCA" -gt 1 ]            && { MARCA=$((MARCA-1)); seguir_marca; } ;;
-        65) [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; } ;;
+        0)  [ "$GUIA" -eq 1 ] && [ "$MT" = "M" ] \
+              && { r=$(fila_a_renglon "$MY") && { MARCA=$r; seguir_marca; }; } ;;
+        64) if [ "$GUIA" -eq 1 ]; then
+              [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
+            else scroll_vista -3; fi ;;
+        65) if [ "$GUIA" -eq 1 ]; then
+              [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; }
+            else scroll_vista 3; fi ;;
       esac ;;
     r)  RATON=$(( 1 - RATON )); guardar_conf
         if [ "$RATON" -eq 1 ]; then raton_on; else raton_off; fi ;;
