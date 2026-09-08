@@ -8,20 +8,20 @@
 #   Directamente desde internet, sin clonar nada:
 #     curl -fsSL https://raw.githubusercontent.com/JansenDev/pdfterm/main/install.sh | bash
 #
-# Si el repositorio es privado hace falta un token con permiso de lectura,
-# en la variable GITHUB_TOKEN o a través de gh:
-#     GITHUB_TOKEN=$(gh auth token) bash -c "$(curl -fsSL ...)"
+# Instala las dependencias que falten sin preguntar. Con --ask pide
+# confirmacion antes de tocar nada.
 set -euo pipefail
 
 REPO="JansenDev/pdfterm"
 RAMA="main"
 DESTINO="$HOME/.local/bin"
-ASUMIR_SI=0
+PREGUNTAR=0
 
 for arg in "$@"; do
   case "$arg" in
     -g|--global) DESTINO="/usr/local/bin" ;;
-    -y|--yes)    ASUMIR_SI=1 ;;
+    -i|--ask)    PREGUNTAR=1 ;;
+    -y|--yes)    PREGUNTAR=0 ;;
     -h|--help)   sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
   esac
 done
@@ -30,13 +30,12 @@ done
 # las preguntas hay que hacerlas contra el terminal.
 preguntar() {
   local r
-  [ "$ASUMIR_SI" -eq 1 ] && return 0
+  [ "$PREGUNTAR" -eq 0 ] && return 0
   if [ -e /dev/tty ] && [ -r /dev/tty ]; then
     printf '    %s [S/n] ' "$1" > /dev/tty
     read -r r < /dev/tty || r=""
   else
-    echo "    Sin terminal para preguntar; usa -y para aceptar sin confirmar." >&2
-    return 1
+    return 0
   fi
   case "$r" in [nN]*) return 1 ;; *) return 0 ;; esac
 }
@@ -71,8 +70,11 @@ if [ "${#FALTAN[@]}" -gt 0 ]; then
   elif command -v brew    >/dev/null; then ORDEN="brew install poppler gawk chafa"
   else echo "    No reconozco el gestor de paquetes. Instálalas a mano." >&2; exit 1
   fi
-  echo "    Voy a ejecutar: $ORDEN"
+  echo "    Instalando: $ORDEN"
   preguntar "¿Continúo?" || { echo "    Cancelado."; exit 1; }
+  if [ -n "$SUDO" ] && ! sudo -n true 2>/dev/null; then
+    echo "    (sudo va a pedir tu contraseña)"
+  fi
   eval "$ORDEN"
 else
   echo "    Todo en orden"

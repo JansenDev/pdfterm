@@ -32,14 +32,16 @@ Instala en `/usr/bin/pdfterm`, disponible para todos los usuarios.
 
     curl -fsSL https://raw.githubusercontent.com/JansenDev/pdfterm/main/install.sh | bash
 
-El instalador comprueba las dependencias, las instala con el gestor que
-encuentre, descarga el programa y lo deja en `~/.local/bin`. Acepta las mismas
-opciones que abajo: `-g` para instalar en todo el sistema y `-y` para no
-preguntar.
+Eso es todo: comprueba las dependencias, instala las que falten con el gestor
+que encuentre, descarga el programa y lo deja en `~/.local/bin`. No pregunta
+nada, así que también sirve en un Dockerfile o en un CI.
 
-Al ejecutarse por una tubería no puede usar la entrada estándar para preguntar
-—la ocupa el propio script—, así que pregunta contra el terminal. En un entorno
-sin terminal, como un Dockerfile o un CI, hay que pasarle `-y`.
+Si no eres root, `sudo` pedirá tu contraseña para instalar los paquetes; el
+instalador avisa antes de llegar a ese punto. Para evitarlo del todo, ejecútalo
+con sudo o desde una sesión donde ya esté validado.
+
+Opciones: `-g` instala en `/usr/local/bin` para todo el sistema, e `--ask` pide
+confirmación antes de instalar dependencias.
 
 ### 3. install.sh — cualquier Linux o macOS
 
