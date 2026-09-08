@@ -3,6 +3,32 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [1.4.0] - 2026-09-08
+
+### Añadido
+
+- Listado de las páginas que tienen ilustración, con la tecla `I`, y salto
+  directo a cualquiera de ellas. Filtra por tamaño, así que no salen los logos
+  ni las marcas de agua que muchos PDF repiten en todas las páginas.
+- Formato de dibujo configurable (`IMG_FORMATO`) y tecla `F` para ir
+  probándolos: auto, sixels, kitty, iterm, symbols.
+- Resolución de extracción configurable (`IMG_DPI`), por defecto 200.
+- La tecla `i` dibuja la página a pantalla completa.
+
+### Corregido
+
+- Las ilustraciones se dibujaban a menos de la mitad de su tamaño posible.
+  `chafa` supone celdas de 8x8 px porque ConPTY no informa del tamaño real;
+  ahora se le pregunta al terminal con `CSI 16 t` y el área se calcula en
+  píxeles reales. En una ventana con celdas de 10x20 px, la imagen pasa de 176
+  a 840 píxeles de alto.
+- Franja negra al lado de las ilustraciones: el área que se le daba a `chafa`
+  era más ancha que la imagen y rellenaba el resto con el color de fondo.
+- Las ilustraciones apaisadas salían estiradas, por el `--font-ratio` que
+  `chafa` usa por defecto.
+- En las páginas de ilustración, la cabecera y la barra de ayuda ocupaban seis
+  filas; ahora se reducen a dos y la imagen aprovecha el resto.
+
 ## [1.3.0] - 2026-09-08
 
 ### Añadido

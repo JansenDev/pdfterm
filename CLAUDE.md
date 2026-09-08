@@ -75,6 +75,34 @@ Dos reglas que no son evidentes al leer el código y que costó descubrir:
   se ve como parpadeo. El lector trabaja en la pantalla alternativa
   (`\033[?1049h`) para no ensuciar el historial del terminal.
 
+## Dibujar ilustraciones: tres cosas que no son evidentes
+
+`render_img()` no le pasa a `chafa` un area en celdas sin mas. Hay tres
+detalles, todos medidos sobre la salida real y ninguno documentado:
+
+1. **`--font-ratio=1/1`.** El valor por defecto es 1/2, y con el se emite un
+   sixel de aspecto distinto al de la imagen: se ve estirada. Con 1/1 el
+   raster sale con el aspecto correcto. Solo se aplica a los formatos
+   graficos; en `symbols` la celda si es 1:2 y forzarlo deformaria.
+2. **8 px por celda.** Con `--font-ratio=1/1`, `chafa` traduce cada celda del
+   `--size` a 8x8 px del sixel. Por eso el area se calcula en pixeles y se
+   divide por 8 al final.
+3. **El area debe tener el aspecto de la imagen.** Si se le da una mas ancha,
+   ajusta a lo alto y rellena el resto con el color de fondo: aparece una
+   franja negra al lado de la ilustracion.
+
+Y el tamaño de celda del terminal se pregunta con `CSI 16 t`
+(`consultar_celda()`), porque ConPTY no lo informa por ioctl y `chafa` asume
+8x8. Sin esa consulta, en una ventana de celdas 10x20 la imagen sale a menos
+de la mitad: se pedian 22 filas y se generaba un sixel de 176 px de alto en
+lugar de 840. Si el terminal no contesta se usa 8x8 y se degrada sin fallar.
+
+`dims_png()` lee ancho y alto de la cabecera del PNG con `od`, para no añadir
+dependencias solo por eso.
+
+En las paginas de ilustracion, `alto_cabecera()` devuelve 1 y se usa `AYUDA_IMG`
+en vez de `AYUDA`, para dejarle a la imagen todas las filas posibles.
+
 ## La barra de ayuda y el alto disponible
 
 La barra de ayuda mide unos 160 caracteres y en la mayoría de ventanas ocupa

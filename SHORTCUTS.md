@@ -84,20 +84,33 @@ entre párrafos tiene que ser mayor que el interlineado.
 
 | Tecla | Efecto |
 |---|---|
-| `i` | Dibujar la página actual como imagen |
+| `i` | Dibujar la página actual a pantalla completa |
+| `I` | Listar las páginas que tienen ilustración y saltar a una |
+| `F` | Cambiar el formato de dibujo: auto, sixels, kitty, iterm, symbols |
 
-Las páginas con menos de 120 caracteres se consideran ilustraciones y se dibujan
-solas, sin pulsar nada. Necesita `chafa`; sin él, el resto sigue funcionando.
+Las páginas con poco texto se consideran ilustraciones y se dibujan solas, sin
+pulsar nada; ahí la cabecera y la barra se reducen a una línea cada una para
+dejarle todo el sitio posible. Necesita `chafa`; sin él, el resto funciona igual.
+
+El listado con `I` filtra por tamaño: solo cuenta las imágenes de al menos
+500×500 px. Muchos PDF llevan logos o marcas de agua repetidos en todas las
+páginas, y sin ese filtro saldrían todas.
+
+Para que las ilustraciones se vean con calidad hace falta un terminal con
+gráficos: Windows Terminal 1.22 o superior, kitty, WezTerm o iTerm2. Si se ven
+como bloques de colores, `chafa` está en modo `symbols`: pulsa `F` hasta
+`sixels`. En el fichero de configuración están `IMG_FORMATO` e `IMG_DPI`.
 
 ## Qué se guarda y qué no
 
 | | Dónde | Cuándo |
 |---|---|---|
 | Página, renglón y guía | `~/.local/share/pdfterm/` | Uno por libro, al momento |
-| Ancho, interlineado, párrafos, números, tema, cabecera, ratón | `~/.config/pdfterm/config` | Al pulsar la tecla |
+| Ancho, interlineado, párrafos, números, tema, cabecera, ratón, formato de imagen | `~/.config/pdfterm/config` | Al pulsar la tecla |
 | Guía encendida y su estilo | Las dos: por libro en `~/.local/share/pdfterm/` y como valor por defecto en el config | Al pulsar `l` o `L` |
 | Cabeceras y pies detectados | `~/.local/share/pdfterm/` | La primera vez que abres cada libro |
 | Texto completo para buscar | `~/.local/share/pdfterm/` | La primera vez que buscas en ese libro |
+| Páginas con ilustración | `~/.local/share/pdfterm/` | La primera vez que pulsas `I` en ese libro |
 
 Si las cabeceras y pies de un libro no se filtran bien, borra lo aprendido y se
 vuelven a detectar:

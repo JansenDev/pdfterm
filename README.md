@@ -46,7 +46,8 @@ completo de la ventana, y si apartas la vista un momento pierdes el renglón.
   sigue ahí.
 - **Recuerda dónde lo dejaste**, por libro y hasta el renglón exacto, junto con
   si tenías la guía encendida.
-- **Dibuja las ilustraciones** en la propia terminal, con `chafa`.
+- **Dibuja las ilustraciones** en la propia terminal, a tamaño real, y te dice
+  en qué páginas están.
 - **Busca en todo el libro** y lista las páginas donde aparece lo que buscas.
 - **Se ajusta mientras lees.** Ancho, interlineado, párrafos, numeración, tema
   de color y estilo de cabecera se cambian con una tecla y se guardan solos.
@@ -65,7 +66,7 @@ eres root, `sudo` pedirá tu contraseña para los paquetes.
 En Debian, Ubuntu o WSL también puedes usar el paquete de la
 [última release](https://github.com/JansenDev/pdfterm/releases/latest):
 
-    sudo apt install ./pdfterm_1.3.0_all.deb
+    sudo apt install ./pdfterm_1.4.0_all.deb
 
 Los demás métodos y la resolución de problemas están en [INSTALL.md](INSTALL.md).
 
@@ -130,8 +131,9 @@ prefieras.
 
 - Necesita que el PDF tenga capa de texto. Con un escaneo hay que pasarle OCR
   antes (`ocrmypdf -l spa entrada.pdf salida.pdf`).
-- Las ilustraciones se ven mejor en terminales con soporte sixel: Windows
-  Terminal 1.22 o superior, kitty, WezTerm, iTerm2.
+- Las ilustraciones necesitan un terminal con gráficos para verse bien: Windows
+  Terminal 1.22 o superior, kitty, WezTerm o iTerm2. En los demás se dibujan
+  con caracteres, que se reconoce pero queda tosco.
 
 ## Licencia
 
