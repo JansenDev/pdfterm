@@ -69,6 +69,28 @@ Dos reglas que no son evidentes al leer el código y que costó descubrir:
 - **`render()` solo se llama al cambiar de página o de formato**, nunca al mover
   la guía. Extraer la página con `pdftotext` cuesta unos 86 ms; hacerlo en cada
   pulsación volvía el lector inusable. Mover la guía solo repinta, y eso son 3 ms.
+- **El eco del terminal se desactiva** con `stty -echo -icanon` mientras el
+  lector esta activo (`modo_lector()`), y se restaura con el estado exacto que
+  habia (`modo_normal()`). Sin eso, los codigos de los eventos del raton que
+  llegan mientras se repinta aparecen escritos en pantalla. `read -s` no basta:
+  solo suprime el eco durante la lectura, no entre una y otra.
+- **Las secuencias de escape se leen enteras**, con margen amplio. Si se
+  abandonan a medias, sus bytes se leen luego como teclas sueltas y disparan
+  comandos: en un evento de raton, el `<` estrecha la columna y el `0` alterna
+  la numeracion. Por lo mismo, despues de preguntarle algo al terminal hay que
+  llamar a `drenar_entrada()`.
+- **El repintado es un solo fotograma**, barra de ayuda incluida, entre
+  `\033[?2026h` y `\033[?2026l` (salida sincronizada). En varias escrituras, el
+  terminal refresca a medias y se ve el barrido del texto.
+- **El tamaño del terminal se mide una vez** y se recalcula en `SIGWINCH`. Cada
+  `tput` cuesta 1 ms y se llamaba varias veces por repintado. Se mide con
+  `stty size </dev/tty`, porque `tput` se queda con 24x80 si la entrada esta
+  redirigida.
+- **El mapa de renglones se carga en memoria** (`cargar_mapa()`). Consultarlo
+  con `grep` costaba tres procesos por cada movimiento de la guia.
+- **Las rafagas de eventos se juntan**: `procesar_tecla()` aplica todo lo que
+  ya haya llegado y se repinta una sola vez. Un repintado por evento hacia que
+  el desplazamiento siguiera despues de soltar la rueda.
 - **La configuración se escribe con retardo.** Los ajustes llaman a
   `marcar_conf()`, y `volcar_conf()` escribe el fichero cuando pasan 0,4 s sin
   pulsar nada, aprovechando el timeout de `read` en `leer_tecla()`. Mantener

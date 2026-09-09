@@ -137,11 +137,22 @@ AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g
 # tamaño real, pero ConPTY no lo informa por ioctl, asi que se le pregunta al
 # terminal con CSI 16 t. Si no contesta se usa 8x8, que es lo que chafa asume.
 CELDA_W=8; CELDA_H=8
+
+# Descarta lo que quede sin leer en la entrada. Imprescindible tras preguntarle
+# algo al terminal: si su respuesta llega tarde y no se consume, sus bytes se
+# leen despues como teclas sueltas y disparan comandos ('0' alterna los
+# numeros, 't' cambia el tema), con lo que la pantalla se descuadra sola.
+drenar_entrada() {
+  local basura
+  while IFS= read -rsn1 -t 0.02 basura 2>/dev/null; do :; done
+  return 0
+}
+
 consultar_celda() {
   local resp
   [ -t 1 ] || return 1
   printf '\033[16t' > /dev/tty 2>/dev/null || return 1
-  IFS= read -rsd t -t 0.3 resp < /dev/tty 2>/dev/null || return 1
+  IFS= read -rsd t -t 0.5 resp < /dev/tty 2>/dev/null || { drenar_entrada; return 1; }
   resp="${resp#*[}"                       # "6;20;10"
   case "$resp" in 6\;*) ;; *) return 1 ;; esac
   resp="${resp#6;}"
@@ -151,9 +162,26 @@ consultar_celda() {
   CELDA_W=$w; CELDA_H=$h
 }
 
-# tput protesta si no hay TERM (contenedores, cron); se asume un tamaño normal
-cols()   { tput cols  2>/dev/null || echo 80; }
-lineas() { tput lines 2>/dev/null || echo 24; }
+# El tamaño del terminal se mide una vez y se recalcula solo al redimensionar.
+# Cada tput cuesta un milisegundo, y con la rueda se repinta muchas veces
+# seguidas: consultarlo en cada repintado era la mitad del trabajo.
+# tput protesta si no hay TERM (contenedores, cron); se asume un tamaño normal.
+COLS=80; LINEAS=24
+medir_terminal() {
+  local t
+  # stty contra /dev/tty es fiable aunque la entrada este redirigida; tput
+  # se queda con el valor de terminfo (24x80) en cuanto stdin no es el terminal.
+  if t=$(stty size </dev/tty 2>/dev/null) && [ -n "$t" ]; then
+    LINEAS="${t%% *}"; COLS="${t##* }"
+  else
+    COLS=$(tput cols  2>/dev/null) || COLS=80
+    LINEAS=$(tput lines 2>/dev/null) || LINEAS=24
+  fi
+  [ "${COLS:-0}" -gt 0 ] || COLS=80
+  [ "${LINEAS:-0}" -gt 0 ] || LINEAS=24
+}
+medir_terminal
+trap medir_terminal WINCH
 
 paleta() {
   case "$TEMA" in
@@ -210,7 +238,7 @@ cabecera() {
   # Con una ilustracion en pantalla, una sola linea para dejarle sitio
   if [ "$TIPO" = img ] && [ "$CABECERA" != oculta ]; then
     printf '\033[2m%s\033[0m\n' \
-      "$(printf '%s · pág %d/%d · ilustración' "$libro" "$p" "$TOTAL" | cut -c1-"$(( $(cols) - 1 ))")"
+      "$(printf '%s · pág %d/%d · ilustración' "$libro" "$p" "$TOTAL" | cut -c1-"$(( $COLS - 1 ))")"
     return
   fi
   case "$CABECERA" in
@@ -220,14 +248,14 @@ cabecera() {
                      "$(printf '%s' "$LIBRO" | cut -c1-38)" "$p" "$TOTAL" "$ajustes" ;;
     *)        printf '\033[1m%s\033[0m\n' "$LIBRO"
               printf '\033[2mpágina %d de %d · %s\033[0m\n' "$p" "$TOTAL" "$ajustes"
-              printf '\033[2m%*s\033[0m\n' "$(cols)" '' | tr ' ' '_' ;;
+              printf '\033[2m%*s\033[0m\n' "$COLS" '' | tr ' ' '_' ;;
   esac
 }
 
 formatear() {
   local prefw=0 marg
   [ "$NUM" -eq 1 ] && prefw=6
-  marg=$(( ( $(cols) - ANCHO - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
+  marg=$(( ( $COLS - ANCHO - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
   awk '
     function flush() { if (length(buf)) { print buf; print ""; buf="" } }
     /^[[:space:]]*$/       { flush(); next }
@@ -267,7 +295,7 @@ dims_png() {
 render_img() {
   command -v chafa >/dev/null || { echo "  (instala chafa para ver las ilustraciones)"; return; }
   local alto opts=() iw ih cw ancho medida
-  alto="${2:-$(( $(lineas) - $(alto_cabecera) - $(filas_ayuda) ))}"
+  alto="${2:-$(( $LINEAS - $(alto_cabecera) - $(filas_ayuda) ))}"
   [ "$alto" -lt 5 ] && alto=5
   local grafico=1
   case "$IMG_FORMATO" in
@@ -277,7 +305,7 @@ render_img() {
   esac
   pdftoppm -f "$1" -l "$1" -r "$IMG_DPI" -png -singlefile "$F" "$TMP/pg" 2>/dev/null
 
-  cw=$(cols)
+  cw=$COLS
   medida="${cw}x${alto}"
 
   # Con los formatos graficos el area se calcula en pixeles, no en celdas:
@@ -319,6 +347,7 @@ render() {
   else
     TIPO=txt
     printf '%s\n' "$txt" | formatear > "$TMP/pagina"
+    cargar_mapa
     RENGLONES=$(sort -n "$TMP/mapa" | tail -1); [ -z "$RENGLONES" ] && RENGLONES=0
     TOTLIN=$(wc -l < "$TMP/pagina")
   fi
@@ -332,22 +361,34 @@ ayuda_actual() { if [ "${TIPO:-txt}" = img ]; then printf '%s' "$AYUDA_IMG"; els
 
 filas_ayuda() {
   local c n a
-  a=$(ayuda_actual); c=$(cols); n=${#a}
+  a=$(ayuda_actual); c=$COLS; n=${#a}
   echo $(( (n + c - 1) / c ))
 }
 
 calcular_alto() {
-  ALTO=$(( $(lineas) - $(alto_cabecera) - 1 - $(filas_ayuda) ))
+  ALTO=$(( $LINEAS - $(alto_cabecera) - 1 - $(filas_ayuda) ))
   [ "$ALTO" -lt 5 ] && ALTO=5
+}
+
+# En que linea de la pagina empieza cada renglon. Se carga una vez por pagina:
+# consultarlo con grep en cada giro de rueda costaba tres procesos por evento.
+declare -A MAPA_LM
+cargar_mapa() {
+  local v n=0
+  MAPA_LM=()
+  while IFS= read -r v; do
+    n=$(( n + 1 ))
+    [ "$v" != 0 ] && [ -z "${MAPA_LM[$v]:-}" ] && MAPA_LM[$v]=$n
+  done < "$TMP/mapa"
 }
 
 # Desplaza la vista lo justo para que el renglon marcado quede visible
 seguir_marca() {
   local lm total
-  lm=$(grep -n "^${MARCA}$" "$TMP/mapa" | head -1 | cut -d: -f1)
+  lm="${MAPA_LM[$MARCA]:-}"
   [ -z "$lm" ] && return
   LM=$lm
-  total=$(wc -l < "$TMP/pagina")
+  total=$TOTLIN
   calcular_alto
   [ "$lm" -lt "$VISTA" ] && VISTA=$lm
   [ "$lm" -gt $(( VISTA + ALTO - 1 )) ] && VISTA=$(( lm - ALTO + 1 ))
@@ -371,7 +412,7 @@ scroll_vista() {
 guia_al_reactivar() {
   local lm n
   calcular_alto
-  lm=$(grep -n "^${MARCA}$" "$TMP/mapa" | head -1 | cut -d: -f1)
+  lm="${MAPA_LM[$MARCA]:-}"
   if [ -n "$lm" ] && [ "$lm" -ge "$VISTA" ] && [ "$lm" -le $(( VISTA + ALTO - 1 )) ]; then
     seguir_marca; return
   fi
@@ -413,13 +454,25 @@ mostrar() {
               print cm $0 off
             }
           }'
-  } | sed 's/$/\x1b[K/' > "$TMP/vista"
+  } | sed 's/$/\x1b[K/' > "$TMP/vista.tmp"
   # Completar con lineas vacias para que la barra quede siempre a la misma altura
   local pintadas faltan
-  pintadas=$(wc -l < "$TMP/vista")
+  pintadas=$(wc -l < "$TMP/vista.tmp")
   faltan=$(( ALTO + $(alto_cabecera) - pintadas ))
-  while [ "$faltan" -gt 0 ]; do printf '\033[K\n' >> "$TMP/vista"; faltan=$(( faltan - 1 )); done
-  printf '\033[H'; cat "$TMP/vista"; printf '\033[J'
+  while [ "$faltan" -gt 0 ]; do printf '\033[K\n' >> "$TMP/vista.tmp"; faltan=$(( faltan - 1 )); done
+
+  # Todo el repintado va en una sola escritura y entre marcas de salida
+  # sincronizada (DEC 2026): asi el terminal no refresca a medias y no se ve
+  # el barrido del texto al desplazarse. Los terminales que no la soportan
+  # ignoran las secuencias.
+  { printf '\033[?2026h\033[H'
+    cat "$TMP/vista.tmp"
+    # La barra va dentro del mismo fotograma. Pintarla aparte, despues del
+    # borrado, dejaba un instante con la pantalla a medias en cada repintado.
+    if [ "$TIPO" = img ]; then printf '\033[2m%s\033[0m\033[J\033[?2026l' "$(ayuda_actual)"
+    else printf '\n\033[2m%s\033[0m\033[J\033[?2026l' "$(ayuda_actual)"; fi
+  } > "$TMP/vista"
+  cat "$TMP/vista"
 }
 
 # Traduce la fila de pantalla donde se hizo clic al renglon que hay debajo.
@@ -454,28 +507,56 @@ buscar() {
 
 # ── Entrada por teclas sueltas y raton ──────────────────────────────────────
 
+# El terminal hace eco de lo que llega mientras el programa esta ocupado
+# repintando: con el raton activo, los codigos de los eventos aparecian escritos
+# en pantalla y descuadraban el texto. read -s no basta, porque solo suprime el
+# eco durante la lectura, no entre una y otra.
+STTY_PREV=""
+modo_lector() {
+  STTY_PREV=$(stty -g 2>/dev/null) || STTY_PREV=""
+  stty -echo -icanon min 1 time 0 2>/dev/null || true
+}
+modo_normal() {
+  if [ -n "$STTY_PREV" ]; then stty "$STTY_PREV" 2>/dev/null || true
+  else stty echo icanon 2>/dev/null || true; fi
+}
+
 raton_on()  { [ "$RATON" -eq 1 ] && printf '\033[?1000h\033[?1006h'; }
 raton_off() { printf '\033[?1006l\033[?1000l'; }
-restaurar() { raton_off; printf '\033[?25h\033[?1049l'; }
-trap 'volcar_conf; rm -rf "$TMP"; restaurar' EXIT
+restaurar() { raton_off; modo_normal; printf '\033[?25h\033[?1049l'; }
+# Al juntar rafagas, la ultima tecla puede procesarse sin que el bucle vuelva
+# a pasar por el guardado: se vuelca tambien al salir.
+guardar_pos() { [ -n "${POSF:-}" ] && printf '%s %s %s\n' "$PAG" "$MARCA" "$GUIA" > "$POSF"; return 0; }
+trap 'volcar_conf; guardar_pos; rm -rf "$TMP"; restaurar' EXIT
 
 # Lee una pulsacion. Deja el resultado en TECLA; si es del raton, ademas en
 # MB (boton), MX/MY (columna y fila) y MT (M al pulsar, m al soltar).
 leer_tecla() {
-  local c d e sec rc
-  while :; do
-    IFS= read -rsn1 -t 0.4 c; rc=$?
-    [ "$rc" -eq 0 ] && break
-    if [ "$rc" -gt 128 ]; then volcar_conf; continue; fi   # 0,4 s sin pulsar
-    return 1                                                # fin de entrada
-  done
+  local c d e sec rc espera="${1:-}"
+  if [ -n "$espera" ]; then
+    IFS= read -rsn1 -t "$espera" c || return 1
+  else
+    while :; do
+      IFS= read -rsn1 -t 0.4 c; rc=$?
+      [ "$rc" -eq 0 ] && break
+      if [ "$rc" -gt 128 ]; then volcar_conf; continue; fi   # 0,4 s sin pulsar
+      return 1                                               # fin de entrada
+    done
+  fi
   if [ "$c" != $'\033' ]; then TECLA="$c"; return 0; fi
-  IFS= read -rsn1 -t 0.05 d || { TECLA=esc; return 0; }
+
+  # A partir de aqui viene una secuencia de escape y hay que leerla ENTERA.
+  # Con un margen corto, un evento del raton se partia y sus bytes se leian
+  # despues como teclas sueltas: en "\033[<65;20;10M" el '<' estrecha la
+  # columna y el '0' alterna los numeros, y la pantalla se descuadraba. Por eso
+  # el margen es amplio: los bytes de una secuencia llegan siempre juntos.
+  IFS= read -rsn1 -t 0.3 d || { TECLA=esc; return 0; }
   [ "$d" != "[" ] && { TECLA=esc; return 0; }
   sec=""
-  while IFS= read -rsn1 e; do
+  while IFS= read -rsn1 -t 0.3 e; do
     sec+="$e"
     case "$e" in [A-Za-z~]) break ;; esac
+    [ "${#sec}" -gt 24 ] && break        # secuencia anomala: se descarta
   done
   case "$sec" in
     A) TECLA=arriba ;;  B) TECLA=abajo ;;
@@ -490,99 +571,113 @@ leer_tecla() {
 
 # Pide una linea de texto. Suspende el raton para no capturar sus codigos.
 pedir() {
-  raton_off; printf '\033[?25h'
+  raton_off; modo_normal; printf '\033[?25h'
   printf '%s' "$1"; IFS= read -r RESP
-  printf '\033[?25l'; raton_on
+  printf '\033[?25l'; modo_lector; raton_on
 }
 
-VISTA=1; ALTO=20; RENGLONES=0; LM=1; TIPO=txt
+VISTA=1; ALTO=20; RENGLONES=0; LM=1; TIPO=txt; SALIR=0
 paleta
+modo_lector
 consultar_celda || true
+drenar_entrada
 printf '\033[?1049h\033[2J\033[?25l'
 raton_on
 render
-while :; do
-  mostrar; echo "$PAG $MARCA $GUIA" > "$POSF"
-  if [ "$TIPO" = img ]; then printf '\033[2m%s\033[0m' "$(ayuda_actual)"
-  else printf '\n\033[2m%s\033[0m' "$(ayuda_actual)"; fi
-  leer_tecla || break
+
+# Aplica la tecla ya leida. No repinta: de eso se encarga el bucle, que junta
+# las rafagas de la rueda en un solo repintado.
+procesar_tecla() {
   case "$TECLA" in
-    ' '|n|derecha) [ "$PAG" -lt "$TOTAL" ] && { PAG=$((PAG+1)); MARCA=1; VISTA=1; render; } ;;
-    p|izquierda)   [ "$PAG" -gt 1 ]        && { PAG=$((PAG-1)); MARCA=1; VISTA=1; render; } ;;
-    j|abajo)  if [ "$GUIA" -eq 1 ]; then
-                [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; }
-              else scroll_vista 1; fi ;;
-    k|arriba) if [ "$GUIA" -eq 1 ]; then
-                [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
-              else scroll_vista -1; fi ;;
-    L)  case "$GUIA_ESTILO" in marca) GUIA_ESTILO=linea ;; *) GUIA_ESTILO=marca ;; esac
-        marcar_conf ;;
-    l)  GUIA=$(( 1 - GUIA )); marcar_conf
-        [ "$GUIA" -eq 1 ] && guia_al_reactivar ;;
-    raton)
-      case "$MB" in
-        0)  [ "$GUIA" -eq 1 ] && [ "$MT" = "M" ] \
-              && { r=$(fila_a_renglon "$MY") && { MARCA=$r; seguir_marca; }; } ;;
-        64) if [ "$GUIA" -eq 1 ]; then
-              [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
-            else scroll_vista -3; fi ;;
-        65) if [ "$GUIA" -eq 1 ]; then
+  ' '|n|derecha) [ "$PAG" -lt "$TOTAL" ] && { PAG=$((PAG+1)); MARCA=1; VISTA=1; render; } ;;
+  p|izquierda)   [ "$PAG" -gt 1 ]        && { PAG=$((PAG-1)); MARCA=1; VISTA=1; render; } ;;
+  j|abajo)  if [ "$GUIA" -eq 1 ]; then
               [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; }
-            else scroll_vista 3; fi ;;
-      esac ;;
-    r)  RATON=$(( 1 - RATON )); marcar_conf
-        if [ "$RATON" -eq 1 ]; then raton_on; else raton_off; fi ;;
-    +)  INTER=$((INTER+1));     [ "$INTER" -gt 3 ]   && INTER=3;   marcar_conf; render ;;
-    -)  INTER=$((INTER-1));     [ "$INTER" -lt 0 ]   && INTER=0;   marcar_conf; render ;;
-    .)  PARRAFO=$((PARRAFO+1)); [ "$PARRAFO" -gt 6 ] && PARRAFO=6; marcar_conf; render ;;
-    ,)  PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; marcar_conf; render ;;
-    '>') ANCHO=$((ANCHO+4));    [ "$ANCHO" -gt 120 ] && ANCHO=120; marcar_conf; render ;;
-    '<') ANCHO=$((ANCHO-4));    [ "$ANCHO" -lt 40 ]  && ANCHO=40;  marcar_conf; render ;;
-    '#'|0) NUM=$(( 1 - NUM )); marcar_conf; render ;;
-    t)  case "$TEMA" in suave) TEMA=sepia;; sepia) TEMA=normal;; normal) TEMA=propio;; *) TEMA=suave;; esac
-        paleta; marcar_conf; render ;;
-    h)  case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;
-                            minima) CABECERA=oculta;; *) CABECERA=completa;; esac
-        marcar_conf ;;
-    g)  pedir "Ir a la página > "
+            else scroll_vista 1; fi ;;
+  k|arriba) if [ "$GUIA" -eq 1 ]; then
+              [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
+            else scroll_vista -1; fi ;;
+  L)  case "$GUIA_ESTILO" in marca) GUIA_ESTILO=linea ;; *) GUIA_ESTILO=marca ;; esac
+      marcar_conf ;;
+  l)  GUIA=$(( 1 - GUIA )); marcar_conf
+      [ "$GUIA" -eq 1 ] && guia_al_reactivar ;;
+  raton)
+    case "$MB" in
+      0)  [ "$GUIA" -eq 1 ] && [ "$MT" = "M" ] \
+            && { r=$(fila_a_renglon "$MY") && { MARCA=$r; seguir_marca; }; } ;;
+      64) if [ "$GUIA" -eq 1 ]; then
+            [ "$MARCA" -gt 1 ] && { MARCA=$((MARCA-1)); seguir_marca; }
+          else scroll_vista -3; fi ;;
+      65) if [ "$GUIA" -eq 1 ]; then
+            [ "$MARCA" -lt "$RENGLONES" ] && { MARCA=$((MARCA+1)); seguir_marca; }
+          else scroll_vista 3; fi ;;
+    esac ;;
+  r)  RATON=$(( 1 - RATON )); marcar_conf
+      if [ "$RATON" -eq 1 ]; then raton_on; else raton_off; fi ;;
+  +)  INTER=$((INTER+1));     [ "$INTER" -gt 3 ]   && INTER=3;   marcar_conf; render ;;
+  -)  INTER=$((INTER-1));     [ "$INTER" -lt 0 ]   && INTER=0;   marcar_conf; render ;;
+  .)  PARRAFO=$((PARRAFO+1)); [ "$PARRAFO" -gt 6 ] && PARRAFO=6; marcar_conf; render ;;
+  ,)  PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; marcar_conf; render ;;
+  '>') ANCHO=$((ANCHO+4));    [ "$ANCHO" -gt 120 ] && ANCHO=120; marcar_conf; render ;;
+  '<') ANCHO=$((ANCHO-4));    [ "$ANCHO" -lt 40 ]  && ANCHO=40;  marcar_conf; render ;;
+  '#'|0) NUM=$(( 1 - NUM )); marcar_conf; render ;;
+  t)  case "$TEMA" in suave) TEMA=sepia;; sepia) TEMA=normal;; normal) TEMA=propio;; *) TEMA=suave;; esac
+      paleta; marcar_conf; render ;;
+  h)  case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;
+                          minima) CABECERA=oculta;; *) CABECERA=completa;; esac
+      marcar_conf ;;
+  g)  pedir "Ir a la página > "
+      [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
+        && { PAG=$RESP; MARCA=1; VISTA=1; render; } ;;
+  i)  clear; render_img "$PAG" $(( $LINEAS - 2 )); pedir "Enter para volver > " ;;
+  F)  case "$IMG_FORMATO" in
+        auto)    IMG_FORMATO=sixels ;;
+        sixels)  IMG_FORMATO=kitty ;;
+        kitty)   IMG_FORMATO=iterm ;;
+        iterm)   IMG_FORMATO=symbols ;;
+        *)       IMG_FORMATO=auto ;;
+      esac
+      marcar_conf
+      clear; printf 'Formato de imagen: \033[1m%s\033[0m\n\n' "$IMG_FORMATO"
+      render_img "$PAG" $(( $LINEAS - 4 )); pedir $'\n''Enter para volver > ' ;;
+  I)  clear
+      res=$(ilustraciones)
+      if [ -z "$res" ]; then
+        pedir "Este PDF no tiene ilustraciones. Enter > "
+      else
+        printf '\033[1mPáginas con ilustración\033[0m  (%s en total)\n\n' "$(echo "$res" | wc -l)"
+        echo "$res" | awk -v c=4 '
+          { printf "  %4s \033[2m%-11s\033[0m", $1, $2
+            if (NR % c == 0) printf "\n" }
+          END { if (NR % c) printf "\n" }'
+        pedir $'\n''Ir a la página > '
         [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
-          && { PAG=$RESP; MARCA=1; VISTA=1; render; } ;;
-    i)  clear; render_img "$PAG" $(( $(lineas) - 2 )); pedir "Enter para volver > " ;;
-    F)  case "$IMG_FORMATO" in
-          auto)    IMG_FORMATO=sixels ;;
-          sixels)  IMG_FORMATO=kitty ;;
-          kitty)   IMG_FORMATO=iterm ;;
-          iterm)   IMG_FORMATO=symbols ;;
-          *)       IMG_FORMATO=auto ;;
-        esac
-        marcar_conf
-        clear; printf 'Formato de imagen: \033[1m%s\033[0m\n\n' "$IMG_FORMATO"
-        render_img "$PAG" $(( $(lineas) - 4 )); pedir $'\n''Enter para volver > ' ;;
-    I)  clear
-        res=$(ilustraciones)
-        if [ -z "$res" ]; then
-          pedir "Este PDF no tiene ilustraciones. Enter > "
-        else
-          printf '\033[1mPáginas con ilustración\033[0m  (%s en total)\n\n' "$(echo "$res" | wc -l)"
-          echo "$res" | awk -v c=4 '
-            { printf "  %4s \033[2m%-11s\033[0m", $1, $2
-              if (NR % c == 0) printf "\n" }
-            END { if (NR % c) printf "\n" }'
-          pedir $'\n''Ir a la página > '
-          [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
-            && { PAG=$RESP; MARCA=1; VISTA=1; render; }
-        fi ;;
-    /)  pedir "Buscar > "
-        if [ -n "$RESP" ]; then
-          res=$(buscar "$RESP")
-          clear
-          if [ -z "$res" ]; then pedir "Sin resultados. Enter > "
-          else echo "Páginas con «$RESP»:"; echo "$res" | tr '\n' ' '; echo
-               pedir $'\n''Ir a la página > '
-               [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
-                 && { PAG=$RESP; MARCA=1; VISTA=1; render; }
-          fi
-        fi ;;
-    q)  clear; break ;;
+          && { PAG=$RESP; MARCA=1; VISTA=1; render; }
+      fi ;;
+  /)  pedir "Buscar > "
+      if [ -n "$RESP" ]; then
+        res=$(buscar "$RESP")
+        clear
+        if [ -z "$res" ]; then pedir "Sin resultados. Enter > "
+        else echo "Páginas con «$RESP»:"; echo "$res" | tr '\n' ' '; echo
+             pedir $'\n''Ir a la página > '
+             [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
+               && { PAG=$RESP; MARCA=1; VISTA=1; render; }
+        fi
+      fi ;;
+  q)  clear; SALIR=1 ;;
   esac
+}
+
+while :; do
+  mostrar; guardar_pos
+  leer_tecla || break
+  procesar_tecla
+  [ "$SALIR" = 1 ] && break
+  # Una vuelta de rueda manda varios eventos seguidos: se aplican todos y se
+  # repinta una sola vez, en lugar de arrastrar un repintado por evento.
+  while leer_tecla 0.01; do
+    procesar_tecla
+    [ "$SALIR" = 1 ] && break 2
+  done
 done

@@ -5,8 +5,32 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [No publicado]
 
+### Corregido
+
+- El texto se descuadraba al desplazarse con la rueda. Eran tres causas
+  distintas con el mismo síntoma:
+  - El terminal hacía eco de los eventos del ratón que llegaban mientras el
+    programa repintaba, y sus códigos aparecían escritos entre el texto. Ahora
+    el eco se desactiva mientras el lector está activo y se restaura al salir.
+  - Las secuencias del ratón se leían a medias si el repintado retrasaba la
+    lectura, y sus bytes se interpretaban después como teclas: en
+    `\033[<65;20;10M`, el `<` estrechaba la columna y el `0` alternaba la
+    numeración.
+  - La respuesta del terminal a la consulta del tamaño de celda, al arrancar,
+    podía quedarse sin leer y colarse igual como teclas sueltas.
+- El repintado se enviaba en varias escrituras y con la barra de ayuda fuera,
+  así que el terminal podía refrescar a medias. Ahora es un solo fotograma,
+  entre marcas de salida sincronizada.
+- `tput` no detecta el tamaño de la ventana si la entrada está redirigida: se
+  quedaba con 24x80. Ahora se mide con `stty size` contra `/dev/tty`.
+
 ### Cambiado
 
+- Desplazarse es 26 veces más rápido, de 26 ms a 1 ms por evento: el tamaño
+  del terminal se mide una vez en vez de en cada repintado, el mapa de
+  renglones vive en memoria en lugar de consultarse con `grep`, y las ráfagas
+  de la rueda se aplican juntas con un solo repintado. Antes, 30 giros
+  seguidos arrastraban casi un segundo después de soltar.
 - La configuración se guarda con un pequeño retardo en vez de en cada
   pulsación: mantener pulsada una tecla de ajuste reescribía el fichero entero
   decenas de veces. Se vuelca al dejar de pulsar y también al salir.
