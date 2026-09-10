@@ -19,6 +19,8 @@ GUIA=0            # guia de lectura por defecto, para libros sin estado propio
 GUIA_ESTILO=linea # linea = se pinta el renglon entero; marca = solo numero y flecha
 IMG_FORMATO=auto  # auto | sixels | kitty | iterm | symbols
 IMG_DPI=200       # resolucion a la que se extrae la pagina para dibujarla
+CURSIVA=1         # mostrar en cursiva lo que el PDF marca asi
+COMILLAS=0        # ademas, encerrar entre comillas lo que va en cursiva
 RATON=1           # el raton marca el renglon donde haces clic
 COLOR_MARCA=214   # color del renglon marcado
 [ -f "$RCF" ] && . "$RCF"
@@ -67,6 +69,18 @@ CABECERA=$CABECERA
 # normal (sin color, usa el del terminal), propio (usa los tres de abajo).
 TEMA=$TEMA
 
+# Respetar las cursivas del documento. pdftotext las descarta, asi que hay que
+# extraer con pdftohtml, que marca el texto en cursiva; cuesta unos 130 ms mas
+# por pagina, solo al cambiarla. Con 0 se usa pdftotext y se pierde el estilo.
+# Se alterna con la tecla c.
+CURSIVA=$CURSIVA
+
+# Encerrar entre comillas dobles los tramos en cursiva. Util cuando el libro
+# usa la cursiva para lo que piensa o dice el personaje. Es independiente de
+# CURSIVA: se pueden tener las comillas sin que el texto se vea en cursiva, y
+# al reves. Se alterna con la tecla C.
+COMILLAS=$COMILLAS
+
 # ---- Ilustraciones ---------------------------------------------------------
 
 # Como se dibujan las imagenes en la terminal. auto deja que chafa lo decida,
@@ -112,7 +126,7 @@ RATON=$RATON
 COLOR_MARCA=$COLOR_MARCA
 EOF
 }
-grep -q '^IMG_FORMATO=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
+grep -q '^COMILLAS=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
 
 # --- pdfterm --config: abrir la configuración en el editor ------------------
 if [ "${1:-}" = "--config" ] || [ "${1:-}" = "-c" ]; then
@@ -131,7 +145,7 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 LIBRO=$(basename "$F" | sed -E 's/\.[Pp][Dd][Ff]$//')
 
 AYUDA_IMG='[espacio]sig [p]ant [i]grande [I]lista [F]formato [h]cab [q]salir'
-AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i/I]magen [F]formato · [+/-]inter [./,]parr [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir'
+AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i/I]magen [F]formato [c]cursiva [C]comillas · [+/-]inter [./,]parr [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir'
 
 # Tamaño de la celda del terminal en pixeles. chafa lo necesita para dibujar a
 # tamaño real, pero ConPTY no lo informa por ioctl, asi que se le pregunta al
@@ -209,10 +223,31 @@ GUIA="${G_GUIA:-$GUIA}"
 [[ "$GUIA"  =~ ^[01]$   ]] || GUIA=0
 [ -n "${2:-}" ] && MARCA=1
 
+# Texto de una pagina. Se usa pdftotext porque conserva la sangria con la que
+# se distinguen los parrafos; pdftohtml posiciona cada fragmento de forma
+# absoluta y esa informacion se pierde.
+extraer_pagina() {
+  pdftotext -layout -f "$1" -l "$1" "$F" - 2>/dev/null
+}
+
+# Fragmentos en cursiva de una pagina, uno por linea y con los espacios ya
+# normalizados. pdftotext descarta el estilo, asi que hay que preguntarselo a
+# pdftohtml, que si marca las cursivas con <i>.
+extraer_cursivas() {
+  [ "$CURSIVA" -eq 1 ] || [ "$COMILLAS" -eq 1 ] || return 0
+  pdftohtml -s -noframes -i -enc UTF-8 -f "$1" -l "$1" -stdout "$F" 2>/dev/null \
+    | sed '/<style/,/<\/style>/d' | tr -d '\n' \
+    | grep -o '<i>[^<]*</i>' \
+    | sed 's/<[^>]*>//g; s/&#160;/ /g; s/&#34;/"/g; s/&amp;/\&/g' \
+    | sed 's/  */ /g; s/^ //; s/ *$//' \
+    | sed 's/^[-–—[:space:]]*//; s/[-–—[:space:]]*$//' \
+    | grep -E '[[:alpha:]]' | awk 'length($0) >= 2'
+}
+
 if [ ! -f "$HDRF" ]; then
   paso=$(( TOTAL / 12 )); [ "$paso" -lt 1 ] && paso=1
   for ((p=paso; p<TOTAL; p+=paso)); do
-    pdftotext -layout -f "$p" -l "$p" "$F" - 2>/dev/null
+    extraer_pagina "$p"
   done | sed -E 's/[0-9]+//g; s/[[:space:]]+/ /g; s/^ //; s/ $//' \
        | grep -v '^ *$' | sort | uniq -c | sort -rn \
        | awk '$1>=6 { sub(/^[[:space:]]*[0-9]+[[:space:]]/, ""); print }' > "$HDRF"
@@ -225,9 +260,12 @@ filtrar() {
       if (!(n in hdr)) print }'
 }
 
+recortar() { awk -v n="$1" '{ print substr($0, 1, n) }'; }
+
 cabecera() {
-  local p=$1 ajustes libro
-  libro=$(printf '%s' "$LIBRO" | cut -c1-38)
+  local p=$1 ajustes libro max
+  max=$(( COLS - 1 ))
+  libro=$(printf '%s' "$LIBRO" | recortar 38)
   if [ "$TIPO" = img ]; then
     ajustes="ilustración · ancho $ANCHO · inter $INTER · párr $PARRAFO · $TEMA"
   elif [ "$GUIA" -eq 1 ]; then
@@ -243,38 +281,74 @@ cabecera() {
   fi
   case "$CABECERA" in
     oculta)   : ;;
-    minima)   printf '\033[2m%s · %d/%d\033[0m\n\n' "$LIBRO" "$p" "$TOTAL" ;;
-    compacta) printf '\033[2m%s · pág \033[0m\033[1m%d\033[0m\033[2m/%d · %s\033[0m\n' \
-                     "$(printf '%s' "$LIBRO" | cut -c1-38)" "$p" "$TOTAL" "$ajustes" ;;
-    *)        printf '\033[1m%s\033[0m\n' "$LIBRO"
-              printf '\033[2mpágina %d de %d · %s\033[0m\n' "$p" "$TOTAL" "$ajustes"
-              printf '\033[2m%*s\033[0m\n' "$COLS" '' | tr ' ' '_' ;;
+    minima)   printf '\033[2m%s\033[0m\n\n' "$(printf '%s · %d/%d' "$LIBRO" "$p" "$TOTAL" | recortar "$max")" ;;
+    compacta) printf '\033[2m%s\033[0m\n' \
+                     "$(printf '%s · pág %d/%d · %s' "$libro" "$p" "$TOTAL" "$ajustes" | recortar "$max")" ;;
+    *)        printf '\033[1m%s\033[0m\n' "$(printf '%s' "$LIBRO" | recortar "$max")"
+              printf '\033[2m%s\033[0m\n' \
+                     "$(printf 'página %d de %d · %s' "$p" "$TOTAL" "$ajustes" | recortar "$max")"
+              printf '\033[2m%*s\033[0m\n' "$max" '' | tr ' ' '_' ;;
   esac
 }
 
 formatear() {
-  local prefw=0 marg
+  local prefw=0 marg ancho
   [ "$NUM" -eq 1 ] && prefw=6
-  marg=$(( ( $COLS - ANCHO - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
-  awk '
-    function flush() { if (length(buf)) { print buf; print ""; buf="" } }
+  # En una ventana estrecha el ancho configurado no cabe: se recorta al hueco
+  # disponible, o las lineas se parten y descuadran la pagina.
+  ancho=$ANCHO
+  [ $(( ancho + prefw + 2 )) -gt "$COLS" ] && ancho=$(( COLS - prefw - 2 ))
+  [ "$ancho" -lt 20 ] && ancho=20
+  marg=$(( ( COLS - ancho - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
+  awk -v curs="$TMP/cursivas" '
+    # Los tramos en cursiva llegan en un fichero aparte, ya normalizados. Se
+    # buscan en el parrafo una vez unido, porque en el texto original vienen
+    # partidos por los saltos de linea del PDF.
+    BEGIN { while ((getline l < curs) > 0) if (length(l)) frag[++nf] = l }
+    function marcar(t,   i, p) {
+      for (i = 1; i <= nf; i++) {
+        p = index(t, frag[i])
+        if (p > 0) t = substr(t, 1, p - 1) "\001" frag[i] "\002" substr(t, p + length(frag[i]))
+      }
+      # Un mismo dialogo suele venir partido en varios <i> seguidos. Si dos
+      # tramos solo estan separados por espacios, son uno: se fusionan para que
+      # no acaben con un par de comillas cada uno.
+      t = gensub(/\002( *)\001/, "\\1", "g", t)
+      return t
+    }
+    function flush() {
+      if (length(buf)) {
+        gsub(/  +/, " ", buf)      # el justificado deja espacios de sobra
+        print marcar(buf); print ""; buf=""
+      }
+    }
     /^[[:space:]]*$/       { flush(); next }
     /^[[:space:]]{2,}/     { flush(); sub(/^[[:space:]]+/,""); buf=$0; next }
                            { sub(/^[[:space:]]+/,""); sub(/[[:space:]]+$/,"")
                              buf = length(buf) ? buf " " $0 : $0 }
     END { flush() }
-  ' | fmt -w "$ANCHO" | awk -v m="$marg" -v il="$INTER" -v pp="$PARRAFO" -v num="$NUM" \
+  ' | fmt -w "$ancho" | awk -v m="$marg" -v il="$INTER" -v pp="$PARRAFO" -v num="$NUM" \
         -v ct="$C_TXT" -v cl="$C_TIT" -v cn="$C_NUM" -v off="$C_OFF" \
-        -v mapa="$TMP/mapa" '
+        -v mapa="$TMP/mapa" -v ital="$CURSIVA" -v com="$COMILLAS" '
     # Ademas del texto escribe un mapa: por cada linea de salida, el numero de
     # renglon al que corresponde (0 si es una linea en blanco). Sirve para
     # traducir la fila donde se hace clic al renglon que hay debajo.
-    BEGIN { n = 0; printf "" > mapa }
+    BEGIN { n = 0; cur = 0
+            ITAL  = ital ? "\033[3m"  : ""
+            RECTO = ital ? "\033[23m" : ""
+            ABRE  = com ? "\"" ITAL : ITAL          # comilla fuera de la cursiva
+            CIERRA = com ? RECTO "\"" : RECTO
+            printf "" > mapa }
     /^[[:space:]]*$/ { for (i = 0; i < pp - il; i++) { print ""; print 0 > mapa } next }
     {
       n++
+      # Cursivas: se reabre el tramo si venia de la linea anterior
+      if (cur) { $0 = ITAL $0 }
+      abre = gsub(/\001/, ABRE)
+      cierra = gsub(/\002/, CIERRA)
+      cur = (cur + abre - cierra > 0) ? 1 : 0
       pre = num ? sprintf("%s%3d \342\224\202 " off, cn, n) : ""
-      c = ($0 ~ /^(Capítulo|Capitulo|CAPÍTULO|Prólogo|Epílogo|Parte|Volumen|Arco)/) ? cl : ct
+      c = ($0 ~ /^(\033\[3m)?(Capítulo|Capitulo|CAPÍTULO|Prólogo|Epílogo|Parte|Volumen|Arco)/) ? cl : ct
       printf "%*s%s%s%s%s\n", m, "", pre, c, $0, off
       print n > mapa
       for (i = 0; i < il; i++) { print ""; print 0 > mapa }
@@ -341,7 +415,8 @@ alto_cabecera() {
 
 render() {
   local txt
-  txt=$(pdftotext -layout -f "$PAG" -l "$PAG" "$F" - 2>/dev/null | filtrar | sed '/^[[:space:]]*$/d')
+  txt=$(extraer_pagina "$PAG" | filtrar | sed '/^[[:space:]]*$/d')
+  extraer_cursivas "$PAG" > "$TMP/cursivas"
   if [ "${#txt}" -lt 120 ]; then
     TIPO=img; : > "$TMP/pagina"; : > "$TMP/mapa"; RENGLONES=0; TOTLIN=0
   else
@@ -531,6 +606,10 @@ trap 'volcar_conf; guardar_pos; rm -rf "$TMP"; restaurar' EXIT
 
 # Lee una pulsacion. Deja el resultado en TECLA; si es del raton, ademas en
 # MB (boton), MX/MY (columna y fila) y MT (M al pulsar, m al soltar).
+# Con PDFTERM_LOG apuntando a un fichero se anota cada tecla recibida, para
+# poder averiguar que llega cuando pasa algo raro. Sin la variable no hace nada.
+registrar() { [ -n "${PDFTERM_LOG:-}" ] && printf '%s %s\n' "$(date +%H:%M:%S.%N | cut -c1-12)" "$*" >> "$PDFTERM_LOG"; return 0; }
+
 leer_tecla() {
   local c d e sec rc espera="${1:-}"
   if [ -n "$espera" ]; then
@@ -543,17 +622,17 @@ leer_tecla() {
       return 1                                               # fin de entrada
     done
   fi
-  if [ "$c" != $'\033' ]; then TECLA="$c"; return 0; fi
+  if [ "$c" != $'\033' ]; then TECLA="$c"; registrar "tecla [$c]"; return 0; fi
 
   # A partir de aqui viene una secuencia de escape y hay que leerla ENTERA.
   # Con un margen corto, un evento del raton se partia y sus bytes se leian
   # despues como teclas sueltas: en "\033[<65;20;10M" el '<' estrecha la
   # columna y el '0' alterna los numeros, y la pantalla se descuadraba. Por eso
   # el margen es amplio: los bytes de una secuencia llegan siempre juntos.
-  IFS= read -rsn1 -t 0.3 d || { TECLA=esc; return 0; }
-  [ "$d" != "[" ] && { TECLA=esc; return 0; }
+  IFS= read -rsn1 -t 1 d || { TECLA=esc; registrar "ESC suelto (sin segundo byte)"; return 0; }
+  [ "$d" != "[" ] && { TECLA=esc; registrar "ESC+[$d] no reconocido"; return 0; }
   sec=""
-  while IFS= read -rsn1 -t 0.3 e; do
+  while IFS= read -rsn1 -t 1 e; do
     sec+="$e"
     case "$e" in [A-Za-z~]) break ;; esac
     [ "${#sec}" -gt 24 ] && break        # secuencia anomala: se descarta
@@ -567,6 +646,7 @@ leer_tecla() {
           else TECLA=otra; fi ;;
     *) TECLA=otra ;;
   esac
+  registrar "secuencia [$sec] -> $TECLA${MB:+ boton=$MB fila=$MY}"
 }
 
 # Pide una linea de texto. Suspende el raton para no capturar sus codigos.
@@ -588,6 +668,7 @@ render
 # Aplica la tecla ya leida. No repinta: de eso se encarga el bucle, que junta
 # las rafagas de la rueda en un solo repintado.
 procesar_tecla() {
+  registrar "  procesa $TECLA (pag $PAG marca $MARCA)"
   case "$TECLA" in
   ' '|n|derecha) [ "$PAG" -lt "$TOTAL" ] && { PAG=$((PAG+1)); MARCA=1; VISTA=1; render; } ;;
   p|izquierda)   [ "$PAG" -gt 1 ]        && { PAG=$((PAG-1)); MARCA=1; VISTA=1; render; } ;;
@@ -630,6 +711,8 @@ procesar_tecla() {
       [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
         && { PAG=$RESP; MARCA=1; VISTA=1; render; } ;;
   i)  clear; render_img "$PAG" $(( $LINEAS - 2 )); pedir "Enter para volver > " ;;
+  c)  CURSIVA=$(( 1 - CURSIVA )); marcar_conf; render ;;
+  C)  COMILLAS=$(( 1 - COMILLAS )); marcar_conf; render ;;
   F)  case "$IMG_FORMATO" in
         auto)    IMG_FORMATO=sixels ;;
         sixels)  IMG_FORMATO=kitty ;;
