@@ -132,6 +132,36 @@ dependencias solo por eso.
 En las paginas de ilustracion, `alto_cabecera()` devuelve 1 y se usa `AYUDA_IMG`
 en vez de `AYUDA`, para dejarle a la imagen todas las filas posibles.
 
+## Cursivas: por que hacen falta dos herramientas
+
+`pdftotext` descarta el formato, asi que no sabe que va en cursiva. `pdftohtml`
+si lo marca con `<i>`, pero **no sirve como extractor principal**: posiciona
+cada fragmento de forma absoluta, de modo que sus parrafos son lineas sueltas y
+se pierde la sangria con la que se distinguen los parrafos de verdad. Al
+probarlo asi, la pagina entera se unia en un bloque y el titulo del capitulo
+quedaba pegado al texto.
+
+Por eso se usan las dos: `extraer_pagina()` da el texto con `pdftotext`, y
+`extraer_cursivas()` obtiene solo la lista de tramos en cursiva con
+`pdftohtml`. El casado se hace en `marcar()`, sobre el parrafo **ya unido**,
+porque en el texto original los tramos vienen partidos por los saltos de linea
+del PDF. Para que coincidan hay que colapsar antes los espacios del justificado.
+
+Tres detalles que costo descubrir:
+
+- **Los tramos contiguos se fusionan.** Un mismo dialogo suele venir en varios
+  `<i>` seguidos, y sin fusionarlos cada trozo recibia su propio par de
+  comillas, partiendo la frase por la mitad.
+- **Se descartan los tramos sin letras.** El PDF marca en cursiva tambien la
+  puntuacion de los dialogos, y fragmentos como `-.` amontonaban comillas
+  sueltas en mitad del texto.
+- **Un tramo largo ocupa varias lineas tras el reflow**, y cada linea se cierra
+  con un reset. El awk lleva el estado en `cur` para reabrir la cursiva al
+  principio de cada linea que continua dentro del tramo.
+
+`CURSIVA` y `COMILLAS` son independientes: la deteccion se activa si cualquiera
+de las dos esta encendida, y cada una decide solo su parte al presentar.
+
 ## La barra de ayuda y el alto disponible
 
 La barra de ayuda mide unos 160 caracteres y en la mayoría de ventanas ocupa
@@ -144,10 +174,15 @@ Si se alarga la barra, no hay que tocar nada más: el cálculo se adapta solo.
 Lo que **no** hay que hacer es acortarla para que quepa en una fila; se probó y
 el usuario prefiere verla entera.
 
-Las líneas de la cabecera sí pueden ocupar la fila completa del terminal en
-ventanas estrechas y descuadrar el repintado. Hubo un arreglo que se revirtió
-porque venía junto con el acortado de la barra. Si se retoma, recortar por
-caracteres y no por bytes: `cut -c` parte los multibyte y ensucia la línea.
+La cabecera se recorta al ancho de la ventana (`recortar()`), y el ancho del
+texto se limita al hueco disponible. Sin eso, en un panel estrecho la cabecera
+ocupa dos filas cuando se contaba una, el terminal desplaza y se ve media
+cabecera y una copia de la barra anterior. El recorte cuenta caracteres, no
+bytes: `cut -c` parte los multibyte y ensucia la linea.
+
+Con `PDFTERM_LOG` apuntando a un fichero se anota cada tecla recibida
+(`registrar()`), que es la forma de averiguar que llega cuando pasa algo raro.
+Sin la variable no hace nada.
 
 ## Convenciones
 

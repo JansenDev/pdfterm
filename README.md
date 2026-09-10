@@ -46,6 +46,8 @@ completo de la ventana, y si apartas la vista un momento pierdes el renglón.
   sigue ahí.
 - **Recuerda dónde lo dejaste**, por libro y hasta el renglón exacto, junto con
   si tenías la guía encendida.
+- **Respeta las cursivas** del documento, y puede entrecomillarlas, que ayuda
+  cuando el libro las usa para lo que piensa o dice un personaje.
 - **Dibuja las ilustraciones** en la propia terminal, a tamaño real, y te dice
   en qué páginas están.
 - **Busca en todo el libro** y lista las páginas donde aparece lo que buscas.
@@ -66,7 +68,7 @@ eres root, `sudo` pedirá tu contraseña para los paquetes.
 En Debian, Ubuntu o WSL también puedes usar el paquete de la
 [última release](https://github.com/JansenDev/pdfterm/releases/latest):
 
-    sudo apt install ./pdfterm_1.4.0_all.deb
+    sudo apt install ./pdfterm_1.5.0_all.deb
 
 Los demás métodos y la resolución de problemas están en [INSTALL.md](INSTALL.md).
 
@@ -87,6 +89,7 @@ Las teclas actúan al pulsarlas, sin Enter:
 | clic izquierdo   | Poner la guía en ese renglón         |
 | `g`              | Ir a una página concreta             |
 | `/`              | Buscar texto en el libro             |
+| `c` / `C`        | Cursivas / entrecomillarlas          |
 | `q`              | Salir                                |
 
 La lista completa está en [SHORTCUTS.md](SHORTCUTS.md).

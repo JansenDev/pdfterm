@@ -64,6 +64,21 @@ Mientras el programa captura el ratón, el terminal no puede usarlo para
 seleccionar texto. Para copiar, mantén **Shift mientras arrastras**, o pulsa `r`.
 A diferencia de la guía, esta preferencia sí se guarda.
 
+## Cursivas
+
+| Tecla | Efecto |
+|---|---|
+| `c` | Mostrar en cursiva lo que el PDF marca así |
+| `C` | Encerrar entre comillas dobles esos mismos tramos |
+
+Las dos son independientes: puedes tener las comillas sin la cursiva, la
+cursiva sin comillas, ambas o ninguna.
+
+Útil cuando el libro usa la cursiva para lo que piensa o dice un personaje.
+`pdftotext` descarta el formato, así que el estilo se obtiene aparte con
+`pdftohtml`; por eso cambiar de página cuesta unos 60 ms más. Con las dos
+apagadas no se consulta y se ahorra ese tiempo.
+
 ## Formato del texto
 
 | Tecla | Efecto | Valores |
@@ -72,6 +87,7 @@ A diferencia de la guía, esta preferencia sí se guarda.
 | `+` `-` | Interlineado | 0 a 3 líneas |
 | `.` `,` | Separación entre párrafos | 0 a 6 líneas (total, no extra) |
 | `#` o `0` | Numeración de renglones | sí / no |
+| `c` / `C` | Cursivas / comillas | sí / no |
 | `t` | Tema de color | suave → sepia → normal → propio |
 | `h` | Estilo de la cabecera | completa → compacta → mínima → oculta |
 

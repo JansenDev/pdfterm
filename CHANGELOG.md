@@ -3,7 +3,31 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
-## [No publicado]
+## [1.5.0] - 2026-09-10
+
+### Añadido
+
+- Se respetan las cursivas del documento (tecla `c`). `pdftotext` descarta el
+  formato, así que el estilo se obtiene aparte con `pdftohtml` y se casa con el
+  texto ya compuesto.
+- Los tramos en cursiva pueden encerrarse entre comillas dobles (tecla `C`),
+  útil cuando el libro las usa para lo que piensa o dice un personaje. Es
+  independiente de que se vean o no en cursiva.
+- Registro de diagnóstico opcional: con `PDFTERM_LOG` apuntando a un fichero se
+  anota cada tecla recibida.
+
+### Corregido
+
+- En un panel estrecho la cabecera ocupaba dos filas cuando se contaba una, y
+  el desbordamiento hacía que se viera media cabecera y una copia de la barra
+  de ayuda. Ahora la cabecera se recorta al ancho de la ventana.
+- El ancho de columna configurado no se ajustaba a ventanas más estrechas, y
+  las líneas se partían descuadrando la página.
+- Al entrecomillar, un mismo diálogo repartido en varios tramos de cursiva
+  recibía un par de comillas por trozo. Los tramos contiguos se fusionan.
+- La puntuación que el PDF marca en cursiva generaba comillas sueltas
+  amontonadas. Los tramos sin letras se descartan.
+- Los espacios de sobra del texto justificado se colapsan.
 
 ### Corregido
 
