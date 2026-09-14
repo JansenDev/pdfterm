@@ -10,6 +10,9 @@ algo son `g` (número de página) y `/` (texto a buscar).
 | `pdfterm libro.pdf` | Abre por la página y el renglón donde lo dejaste |
 | `pdfterm libro.pdf 61` | Abre en la página 61 |
 | `pdfterm --config` | Edita la configuración con tu `$EDITOR` |
+| `pdfterm --update` | Se actualiza a la última versión publicada |
+| `pdfterm --version` | Muestra la versión instalada |
+| `pdfterm --help` | Resumen de las opciones |
 | `pdfterm -c` | Igual que `--config` |
 
 ## Navegación

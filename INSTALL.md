@@ -81,6 +81,14 @@ Es un único script sin compilar:
 
 ## Actualizar
 
+Lo más cómodo, desde cualquier instalación:
+
+    pdfterm --update
+
+Descarga la última versión publicada y se reemplaza a sí mismo. Si el programa
+está en un sitio que necesita permisos, pide `sudo`. Si ya está al día, lo dice
+y no toca nada.
+
 Desde el repositorio:
 
     cd pdfterm && git pull && ./install.sh

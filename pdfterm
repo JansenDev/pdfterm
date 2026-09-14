@@ -2,6 +2,9 @@
 # pdfterm — lector de PDF en la terminal, con formato de lectura ajustable.
 set -uo pipefail
 
+VERSION_PDFTERM=1.5.0
+REPO_PDFTERM=JansenDev/pdfterm
+
 CACHE="$HOME/.local/share/pdfterm"; CONF="$HOME/.config/pdfterm"
 mkdir -p "$CACHE" "$CONF"; RCF="$CONF/config"
 
@@ -128,10 +131,44 @@ EOF
 }
 grep -q '^COMILLAS=' "$RCF" 2>/dev/null || guardar_conf   # crea o migra el fichero
 
-# --- pdfterm --config: abrir la configuración en el editor ------------------
-if [ "${1:-}" = "--config" ] || [ "${1:-}" = "-c" ]; then
-  exec "${EDITOR:-nano}" "$RCF"
-fi
+# --- Opciones de la linea de ordenes ----------------------------------------
+case "${1:-}" in
+  --config|-c)  exec "${EDITOR:-nano}" "$RCF" ;;
+  --version|-v) echo "pdfterm $VERSION_PDFTERM"; exit 0 ;;
+  --help|-h)
+    printf '%s\n' \
+      "Uso: pdfterm libro.pdf [página]" "" \
+      "  --config, -c    editar la configuración" \
+      "  --update, -u    actualizar a la última versión" \
+      "  --version, -v   ver la versión instalada" \
+      "  --help, -h      esta ayuda" "" \
+      "Las teclas del lector aparecen en la barra inferior."
+    exit 0 ;;
+  --update|-u)
+    # Se descarga la version de la rama principal y se sustituye este mismo
+    # fichero. Se comparan los contenidos, no las versiones: asi se detecta
+    # cualquier cambio aunque no se haya publicado una version nueva.
+    destino=$(readlink -f "${BASH_SOURCE[0]}")
+    tmp=$(mktemp) || exit 1
+    trap 'rm -f "$tmp"' EXIT
+    echo "Descargando la última versión de $REPO_PDFTERM..."
+    if ! curl -fsSL "https://raw.githubusercontent.com/$REPO_PDFTERM/main/pdfterm" -o "$tmp"; then
+      echo "No se pudo descargar. ¿Hay conexión?" >&2; exit 1
+    fi
+    head -1 "$tmp" | grep -q '^#!' || { echo "Lo descargado no es el programa." >&2; exit 1; }
+    if cmp -s "$tmp" "$destino"; then
+      echo "Ya tienes la última versión ($VERSION_PDFTERM)."
+      exit 0
+    fi
+    nueva=$(grep -m1 '^VERSION_PDFTERM=' "$tmp" | cut -d= -f2)
+    if install -m 755 "$tmp" "$destino" 2>/dev/null; then :
+    elif command -v sudo >/dev/null && sudo install -m 755 "$tmp" "$destino"; then :
+    else echo "No se pudo escribir en $destino. Prueba con sudo." >&2; exit 1
+    fi
+    echo "Actualizado: $VERSION_PDFTERM → ${nueva:-desconocida}"
+    echo "Novedades: https://github.com/$REPO_PDFTERM/blob/main/CHANGELOG.md"
+    exit 0 ;;
+esac
 
 F="${1:-}"
 [ -z "$F" ] && { echo "Uso: pdfterm archivo.pdf [página]   ·   pdfterm --config"; exit 1; }

@@ -5,6 +5,12 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ## [No publicado]
 
+### Añadido
+
+- `pdfterm --update` se actualiza a la última versión publicada, sin tener que
+  clonar el repositorio ni volver a pasar por el instalador.
+- `pdfterm --version` y `pdfterm --help`.
+
 ### Corregido
 
 - Al volver de ver una ilustración quedaban restos de la imagen bajo el texto.
