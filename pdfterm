@@ -161,6 +161,14 @@ case "${1:-}" in
       exit 0
     fi
     nueva=$(grep -m1 '^VERSION_PDFTERM=' "$tmp" | cut -d= -f2)
+    # Nunca hacia atras: GitHub sirve el fichero cacheado unos minutos, y sin
+    # esta comprobacion un --update justo despues de publicar reinstalaria la
+    # version anterior encima de la nueva.
+    if [ -n "$nueva" ] && [ "$nueva" != "$VERSION_PDFTERM" ] \
+       && [ "$(printf '%s\n%s\n' "$nueva" "$VERSION_PDFTERM" | sort -V | tail -1)" = "$VERSION_PDFTERM" ]; then
+      echo "Lo publicado ($nueva) es anterior a lo que tienes ($VERSION_PDFTERM); no se toca nada."
+      exit 0
+    fi
     if install -m 755 "$tmp" "$destino" 2>/dev/null; then :
     elif command -v sudo >/dev/null && sudo install -m 755 "$tmp" "$destino"; then :
     else echo "No se pudo escribir en $destino. Prueba con sudo." >&2; exit 1
