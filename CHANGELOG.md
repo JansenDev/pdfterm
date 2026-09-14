@@ -3,6 +3,24 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
+## [No publicado]
+
+### Corregido
+
+- Al entrecomillar, una palabra suelta en cursiva dentro de una frase que ya
+  llevaba comillas las duplicaba. Ahora solo se entrecomillan los tramos que
+  parecen diálogo: tres o más palabras, o que terminen en puntuación.
+- Un tramo corto contenido dentro de otro más largo se marcaba dos veces y la
+  cursiva quedaba anidada. Los tramos se marcan de más largo a más corto y se
+  descartan los que son subcadena de otro.
+
+### Cambiado
+
+- Con `IMG_FORMATO=auto` se le pregunta al terminal si sabe dibujar sixels
+  (DA1) en vez de dejárselo a `chafa`, que no detecta el soporte de Windows
+  Terminal y caía a modo caracteres. Ahora el valor por defecto da buena
+  calidad sin tener que forzar nada.
+
 ## [1.5.0] - 2026-09-10
 
 ### Añadido

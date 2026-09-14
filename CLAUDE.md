@@ -120,6 +120,11 @@ detalles, todos medidos sobre la salida real y ninguno documentado:
    ajusta a lo alto y rellena el resto con el color de fondo: aparece una
    franja negra al lado de la ilustracion.
 
+El soporte de sixel se pregunta con DA1 (`CSI c`): el `4` de la lista que
+responde el terminal significa sixel. `chafa` no lo comprueba y se queda en
+modo caracteres aunque el terminal pueda mas, y por eso `auto` daba mala
+calidad en Windows Terminal.
+
 Y el tamaño de celda del terminal se pregunta con `CSI 16 t`
 (`consultar_celda()`), porque ConPTY no lo informa por ioctl y `chafa` asume
 8x8. Sin esa consulta, en una ventana de celdas 10x20 la imagen sale a menos
@@ -152,6 +157,11 @@ Tres detalles que costo descubrir:
 - **Los tramos contiguos se fusionan.** Un mismo dialogo suele venir en varios
   `<i>` seguidos, y sin fusionarlos cada trozo recibia su propio par de
   comillas, partiendo la frase por la mitad.
+- **Solo se entrecomillan los tramos que parecen dialogo** (`es_frase()`): tres
+  o mas palabras, o que terminen en puntuacion. Una palabra suelta en cursiva
+  es enfasis, y entrecomillarla dentro de una frase que ya lleva comillas las
+  duplica. Los dos casos usan marcas distintas para poder distinguirlos al
+  presentar.
 - **Se descartan los tramos sin letras.** El PDF marca en cursiva tambien la
   puntuacion de los dialogos, y fragmentos como `-.` amontonaban comillas
   sueltas en mitad del texto.

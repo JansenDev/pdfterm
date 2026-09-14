@@ -83,9 +83,9 @@ COMILLAS=$COMILLAS
 
 # ---- Ilustraciones ---------------------------------------------------------
 
-# Como se dibujan las imagenes en la terminal. auto deja que chafa lo decida,
-# pero no siempre acierta: en Windows Terminal 1.22 o superior, kitty, WezTerm
-# e iTerm2 conviene forzar el formato para tener calidad de verdad.
+# Como se dibujan las imagenes en la terminal. Con auto se le pregunta al
+# terminal si sabe dibujar sixels y se usan si puede; los demas valores fuerzan
+# un formato concreto.
 #   sixels   graficos reales, la mejor opcion si el terminal los soporta
 #   kitty    protocolo de kitty
 #   iterm    protocolo de iTerm2
@@ -160,6 +160,18 @@ drenar_entrada() {
   local basura
   while IFS= read -rsn1 -t 0.02 basura 2>/dev/null; do :; done
   return 0
+}
+
+# ¿El terminal sabe dibujar sixels? Se le pregunta con DA1 (CSI c): responde
+# con la lista de lo que soporta, y el 4 de esa lista significa sixel. chafa no
+# lo comprueba y se queda en modo caracteres aunque el terminal pueda mas.
+SIXEL=0
+consultar_sixel() {
+  local resp
+  [ -t 1 ] || return 1
+  printf '\033[c' > /dev/tty 2>/dev/null || return 1
+  IFS= read -rsd c -t 0.5 resp < /dev/tty 2>/dev/null || { drenar_entrada; return 1; }
+  case ";$resp;" in *";4;"*) SIXEL=1 ;; esac
 }
 
 consultar_celda() {
@@ -304,16 +316,46 @@ formatear() {
     # Los tramos en cursiva llegan en un fichero aparte, ya normalizados. Se
     # buscan en el parrafo una vez unido, porque en el texto original vienen
     # partidos por los saltos de linea del PDF.
-    BEGIN { while ((getline l < curs) > 0) if (length(l)) frag[++nf] = l }
+    BEGIN {
+      while ((getline l < curs) > 0) if (length(l)) frag[++nf] = l
+      # Se marcan de mas largo a mas corto, y se descartan los que son
+      # subcadena de otro: si no, un tramo corto se vuelve a marcar dentro de
+      # uno largo ya marcado y la cursiva queda anidada.
+      for (i = 1; i <= nf; i++) orden[i] = i
+      for (i = 1; i <= nf; i++)
+        for (j = i + 1; j <= nf; j++)
+          if (length(frag[orden[j]]) > length(frag[orden[i]])) {
+            tmp = orden[i]; orden[i] = orden[j]; orden[j] = tmp
+          }
+      for (i = 1; i <= nf; i++)
+        for (j = 1; j <= nf; j++)
+          if (i != j && length(frag[j]) > length(frag[i]) && index(frag[j], frag[i]) > 0) {
+            omitir[i] = 1; break
+          }
+    }
+    # Un tramo de una o dos palabras sin puntuacion final es enfasis, no
+    # dialogo: se pone en cursiva pero no se entrecomilla. Si se hiciera,
+    # una palabra suelta dentro de una frase ya entrecomillada acabaria con
+    # comillas dobladas.
+    function es_frase(t,   w) {
+      return (split(t, w, /[[:space:]]+/) >= 3 || t ~ /[.?!…]$/)
+    }
     function marcar(t,   i, p) {
-      for (i = 1; i <= nf; i++) {
+      for (k = 1; k <= nf; k++) {
+        i = orden[k]
+        if (omitir[i]) continue
         p = index(t, frag[i])
-        if (p > 0) t = substr(t, 1, p - 1) "\001" frag[i] "\002" substr(t, p + length(frag[i]))
+        if (p > 0) {
+          a = es_frase(frag[i]) ? "\001" : "\003"
+          b = es_frase(frag[i]) ? "\002" : "\004"
+          t = substr(t, 1, p - 1) a frag[i] b substr(t, p + length(frag[i]))
+        }
       }
       # Un mismo dialogo suele venir partido en varios <i> seguidos. Si dos
       # tramos solo estan separados por espacios, son uno: se fusionan para que
       # no acaben con un par de comillas cada uno.
       t = gensub(/\002( *)\001/, "\\1", "g", t)
+      t = gensub(/\004( *)\003/, "\\1", "g", t)
       return t
     }
     function flush() {
@@ -344,8 +386,8 @@ formatear() {
       n++
       # Cursivas: se reabre el tramo si venia de la linea anterior
       if (cur) { $0 = ITAL $0 }
-      abre = gsub(/\001/, ABRE)
-      cierra = gsub(/\002/, CIERRA)
+      abre = gsub(/\001/, ABRE) + gsub(/\003/, ITAL)
+      cierra = gsub(/\002/, CIERRA) + gsub(/\004/, RECTO)
       cur = (cur + abre - cierra > 0) ? 1 : 0
       pre = num ? sprintf("%s%3d \342\224\202 " off, cn, n) : ""
       c = ($0 ~ /^(\033\[3m)?(Capítulo|Capitulo|CAPÍTULO|Prólogo|Epílogo|Parte|Volumen|Arco)/) ? cl : ct
@@ -374,7 +416,7 @@ render_img() {
   local grafico=1
   case "$IMG_FORMATO" in
     symbols) opts+=(-f symbols); grafico=0 ;;
-    auto)    ;;
+    auto)    if [ "$SIXEL" -eq 1 ]; then opts+=(-f sixels); else grafico=0; fi ;;
     *)       opts+=(-f "$IMG_FORMATO") ;;
   esac
   pdftoppm -f "$1" -l "$1" -r "$IMG_DPI" -png -singlefile "$F" "$TMP/pg" 2>/dev/null
@@ -660,6 +702,8 @@ VISTA=1; ALTO=20; RENGLONES=0; LM=1; TIPO=txt; SALIR=0
 paleta
 modo_lector
 consultar_celda || true
+drenar_entrada
+consultar_sixel || true
 drenar_entrada
 printf '\033[?1049h\033[2J\033[?25l'
 raton_on

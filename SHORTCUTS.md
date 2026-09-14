@@ -74,6 +74,10 @@ A diferencia de la guía, esta preferencia sí se guarda.
 Las dos son independientes: puedes tener las comillas sin la cursiva, la
 cursiva sin comillas, ambas o ninguna.
 
+Solo se entrecomillan los tramos que parecen diálogo, es decir, de tres o más
+palabras o que terminen en puntuación. Una palabra suelta en cursiva se toma
+como énfasis y se deja sin comillas.
+
 Útil cuando el libro usa la cursiva para lo que piensa o dice un personaje.
 `pdftotext` descarta el formato, así que el estilo se obtiene aparte con
 `pdftohtml`; por eso cambiar de página cuesta unos 60 ms más. Con las dos
