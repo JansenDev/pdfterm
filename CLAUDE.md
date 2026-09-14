@@ -120,6 +120,10 @@ detalles, todos medidos sobre la salida real y ninguno documentado:
    ajusta a lo alto y rellena el resto con el color de fondo: aparece una
    franja negra al lado de la ilustracion.
 
+Los sixels **no se borran** con `\033[K` ni `\033[J`, solo con `\033[2J`. Por
+eso `mostrar()` lleva `TIPO_PREV`: al pasar de una ilustracion a texto mete el
+borrado completo en el fotograma, o quedan restos de la imagen bajo el texto.
+
 El soporte de sixel se pregunta con DA1 (`CSI c`): el `4` de la lista que
 responde el terminal significa sixel. `chafa` no lo comprueba y se queda en
 modo caracteres aunque el terminal pueda mas, y por eso `auto` daba mala

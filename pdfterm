@@ -538,7 +538,14 @@ guia_al_reactivar() {
   seguir_marca
 }
 
+TIPO_PREV=txt
 mostrar() {
+  local limpiar=""
+  # Al pasar de una ilustracion a texto hay que borrar la pantalla entera: los
+  # sixels no se van con el borrado de texto (\033[K y \033[J) y quedan restos
+  # de la imagen bajo el contenido nuevo.
+  [ "$TIPO_PREV" = img ] && [ "$TIPO" != img ] && limpiar=$'\033[2J'
+  TIPO_PREV=$TIPO
   if [ "$TIPO" = img ]; then
     clear; cabecera "$PAG"; render_img "$PAG"; return
   fi
@@ -582,7 +589,7 @@ mostrar() {
   # sincronizada (DEC 2026): asi el terminal no refresca a medias y no se ve
   # el barrido del texto al desplazarse. Los terminales que no la soportan
   # ignoran las secuencias.
-  { printf '\033[?2026h\033[H'
+  { printf '\033[?2026h%s\033[H' "$limpiar"
     cat "$TMP/vista.tmp"
     # La barra va dentro del mismo fotograma. Pintarla aparte, despues del
     # borrado, dejaba un instante con la pantalla a medias en cada repintado.
@@ -754,7 +761,8 @@ procesar_tecla() {
   g)  pedir "Ir a la página > "
       [[ "$RESP" =~ ^[0-9]+$ ]] && [ "$RESP" -ge 1 ] && [ "$RESP" -le "$TOTAL" ] \
         && { PAG=$RESP; MARCA=1; VISTA=1; render; } ;;
-  i)  clear; render_img "$PAG" $(( $LINEAS - 2 )); pedir "Enter para volver > " ;;
+  i)  clear; render_img "$PAG" $(( $LINEAS - 2 )); pedir "Enter para volver > "
+      TIPO_PREV=img ;;
   c)  CURSIVA=$(( 1 - CURSIVA )); marcar_conf; render ;;
   C)  COMILLAS=$(( 1 - COMILLAS )); marcar_conf; render ;;
   F)  case "$IMG_FORMATO" in
@@ -766,7 +774,8 @@ procesar_tecla() {
       esac
       marcar_conf
       clear; printf 'Formato de imagen: \033[1m%s\033[0m\n\n' "$IMG_FORMATO"
-      render_img "$PAG" $(( $LINEAS - 4 )); pedir $'\n''Enter para volver > ' ;;
+      render_img "$PAG" $(( $LINEAS - 4 )); pedir $'\n''Enter para volver > '
+      TIPO_PREV=img ;;
   I)  clear
       res=$(ilustraciones)
       if [ -z "$res" ]; then

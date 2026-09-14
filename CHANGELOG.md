@@ -7,6 +7,11 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Corregido
 
+- Al volver de ver una ilustración quedaban restos de la imagen bajo el texto.
+  Los gráficos sixel no se borran con las secuencias de borrado de texto: hace
+  falta limpiar la pantalla entera, y ahora se hace al pasar de una ilustración
+  a una página de texto.
+
 - Al entrecomillar, una palabra suelta en cursiva dentro de una frase que ya
   llevaba comillas las duplicaba. Ahora solo se entrecomillan los tramos que
   parecen diálogo: tres o más palabras, o que terminen en puntuación.
