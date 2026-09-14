@@ -78,6 +78,7 @@ Los demás métodos y la resolución de problemas están en [INSTALL.md](INSTALL
     pdfterm libro.pdf 61      # abre en la página 61
     pdfterm --config          # edita la configuración
     pdfterm --update          # actualiza a la última versión
+    pdfterm --uninstall       # desinstala
 
 Las teclas actúan al pulsarlas, sin Enter:
 

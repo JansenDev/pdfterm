@@ -140,9 +140,46 @@ case "${1:-}" in
       "Uso: pdfterm libro.pdf [página]" "" \
       "  --config, -c    editar la configuración" \
       "  --update, -u    actualizar a la última versión" \
+      "  --uninstall     desinstalar el programa (--purge borra también los ajustes)" \
       "  --version, -v   ver la versión instalada" \
       "  --help, -h      esta ayuda" "" \
       "Las teclas del lector aparecen en la barra inferior."
+    exit 0 ;;
+  --uninstall)
+    destino=$(readlink -f "${BASH_SOURCE[0]}")
+    # Si vino de un paquete, quitarlo a mano dejaria a apt creyendo que sigue
+    # instalado: mejor mandar al gestor de paquetes.
+    if command -v dpkg >/dev/null && dpkg -S "$destino" 2>/dev/null | grep -q '^pdfterm:'; then
+      echo "Está instalado con apt. Para quitarlo:"
+      echo "    sudo apt remove pdfterm"
+      exit 1
+    fi
+    echo "Se va a borrar el programa:"
+    echo "    $destino"
+    echo
+    echo "Tus ajustes y el punto de lectura de cada libro están en:"
+    echo "    $CONF"
+    echo "    $CACHE"
+    if [ "${2:-}" = "--yes" ] || [ "${2:-}" = "-y" ] || [ "${2:-}" = "--purge" ]; then resp=s
+    elif [ -e /dev/tty ]; then printf '\n¿Borrar el programa? [s/N] ' > /dev/tty; read -r resp < /dev/tty
+    else echo "Sin terminal para preguntar; usa: pdfterm --uninstall --yes" >&2; exit 1
+    fi
+    case "$resp" in [sSyY]*) ;; *) echo "Cancelado."; exit 0 ;; esac
+    if rm -f "$destino" 2>/dev/null; then :
+    elif command -v sudo >/dev/null && sudo rm -f "$destino"; then :
+    else echo "No se pudo borrar $destino." >&2; exit 1
+    fi
+    echo "Borrado: $destino"
+    if [ "${2:-}" = "--purge" ]; then resp=s
+    elif [ "${2:-}" = "--yes" ] || [ "${2:-}" = "-y" ]; then resp=n
+    elif [ -e /dev/tty ]; then printf '¿Borrar también los ajustes y los puntos de lectura? [s/N] ' > /dev/tty; read -r resp < /dev/tty
+    else resp=n
+    fi
+    case "$resp" in
+      [sSyY]*) rm -rf "$CONF" "$CACHE"; echo "Borrados los ajustes y los puntos de lectura." ;;
+      *) echo "Se conservan los ajustes y los puntos de lectura."
+         echo "Para quitarlos: rm -rf \"$CONF\" \"$CACHE\"" ;;
+    esac
     exit 0 ;;
   --update|-u)
     # Se descarga la version de la rama principal y se sustituye este mismo

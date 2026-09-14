@@ -9,6 +9,9 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 - `pdfterm --update` se actualiza a la última versión publicada, sin tener que
   clonar el repositorio ni volver a pasar por el instalador.
+- `pdfterm --uninstall` desinstala el programa, preguntando antes si borrar
+  también los ajustes y los puntos de lectura. Con `--purge` lo borra todo sin
+  preguntar. Si se instaló con el paquete, remite a `apt`.
 - `pdfterm --version` y `pdfterm --help`.
 
 ### Corregido

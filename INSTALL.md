@@ -99,6 +99,16 @@ Desde el paquete, descargando el `.deb` de la nueva versión:
 
 ## Desinstalar
 
+Desde cualquier instalación, sin necesitar el repositorio:
+
+    pdfterm --uninstall            # solo el programa, pregunta antes
+    pdfterm --uninstall --purge    # también ajustes y puntos de lectura
+
+Si se instaló con el paquete, avisa y remite a `apt`, para no dejar a `apt`
+creyendo que el programa sigue ahí.
+
+Desde el repositorio:
+
     ./uninstall.sh            # solo el programa
     ./uninstall.sh --purge    # también configuración y caché
 
