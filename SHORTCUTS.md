@@ -94,6 +94,7 @@ apagadas no se consulta y se ahorra ese tiempo.
 | `>` `<` | Ancho de la columna | 40 a 120, de 4 en 4 |
 | `+` `-` | Interlineado | 0 a 3 líneas |
 | `.` `,` | Separación entre párrafos | 0 a 6 líneas (total, no extra) |
+| `s` `S` | Sangría de la primera línea del párrafo | 0 a 8 espacios |
 | `#` o `0` | Numeración de renglones | sí / no |
 | `c` / `C` | Cursivas / comillas | sí / no |
 | `t` | Tema de color | suave → sepia → normal → propio |
@@ -103,6 +104,10 @@ Todos se guardan al momento y valen para el próximo libro que abras.
 
 Para que los párrafos se distingan de un simple salto de renglón, la separación
 entre párrafos tiene que ser mayor que el interlineado.
+
+La sangría es la alternativa a esa línea en blanco: con `PARRAFO=0` y
+`SANGRIA=3` los párrafos se distinguen por el sangrado, como en un libro
+impreso, y entra más texto en pantalla.
 
 ## Ilustraciones
 

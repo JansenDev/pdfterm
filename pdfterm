@@ -12,6 +12,7 @@ mkdir -p "$CACHE" "$CONF"; RCF="$CONF/config"
 ANCHO=64          # ancho de la columna de texto, en caracteres
 INTER=1           # líneas en blanco entre renglones
 PARRAFO=3         # líneas en blanco entre párrafos (total, no extra)
+SANGRIA=0         # espacios de sangría en la primera línea de cada párrafo
 NUM=1             # numerar los renglones a la izquierda
 TEMA=suave        # suave | sepia | normal | propio
 CABECERA=completa # completa | compacta | minima | oculta
@@ -54,6 +55,11 @@ INTER=$INTER
 # Líneas en blanco entre un párrafo y el siguiente. Es el total, no un extra
 # sobre INTER. Ponlo mayor que INTER para que los párrafos se distingan.
 PARRAFO=$PARRAFO
+
+# Sangría de la primera línea de cada párrafo, en espacios. Permite distinguir
+# los párrafos sin gastar una línea en blanco: con PARRAFO=0 y SANGRIA=3 se lee
+# como un libro impreso y entra más texto en pantalla.
+SANGRIA=$SANGRIA
 
 # Numeración de renglones en el margen izquierdo. 1 = sí, 0 = no.
 # Los números se reinician en cada página.
@@ -227,7 +233,7 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 LIBRO=$(basename "$F" | sed -E 's/\.[Pp][Dd][Ff]$//')
 
 AYUDA_IMG='[espacio]sig [p]ant [i]grande [I]lista [F]formato [h]cab [q]salir'
-AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i/I]magen [F]formato [c]cursiva [C]comillas · [+/-]inter [./,]parr [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir'
+AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i/I]magen [F]formato [c]cursiva [C]comillas · [+/-]inter [./,]parr [s/S]sangría [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir'
 
 # Tamaño de la celda del terminal en pixeles. chafa lo necesita para dibujar a
 # tamaño real, pero ConPTY no lo informa por ioctl, asi que se le pregunta al
@@ -406,7 +412,7 @@ formatear() {
   [ $(( ancho + prefw + 2 )) -gt "$COLS" ] && ancho=$(( COLS - prefw - 2 ))
   [ "$ancho" -lt 20 ] && ancho=20
   marg=$(( ( COLS - ancho - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
-  awk -v curs="$TMP/cursivas" '
+  awk -v curs="$TMP/cursivas" -v sang="$SANGRIA" '
     # Los tramos en cursiva llegan en un fichero aparte, ya normalizados. Se
     # buscan en el parrafo una vez unido, porque en el texto original vienen
     # partidos por los saltos de linea del PDF.
@@ -452,10 +458,18 @@ formatear() {
       t = gensub(/\004( *)\003/, "\\1", "g", t)
       return t
     }
-    function flush() {
+    function flush(   t, q) {
       if (length(buf)) {
         gsub(/  +/, " ", buf)      # el justificado deja espacios de sobra
-        print marcar(buf); print ""; buf=""
+        t = marcar(buf)
+        if (sang > 0) {
+          # La primera palabra va sangrada y el resto en otra linea: asi fmt -c
+          # sangra solo la primera linea y deja el resto al margen.
+          q = index(t, " ")
+          if (q > 0) print sprintf("%*s", sang, "") substr(t, 1, q - 1) "\n" substr(t, q + 1)
+          else       print sprintf("%*s", sang, "") t
+        } else print t
+        print ""; buf = ""
       }
     }
     /^[[:space:]]*$/       { flush(); next }
@@ -463,7 +477,7 @@ formatear() {
                            { sub(/^[[:space:]]+/,""); sub(/[[:space:]]+$/,"")
                              buf = length(buf) ? buf " " $0 : $0 }
     END { flush() }
-  ' | fmt -w "$ancho" | awk -v m="$marg" -v il="$INTER" -v pp="$PARRAFO" -v num="$NUM" \
+  ' | fmt -c -w "$ancho" | awk -v m="$marg" -v il="$INTER" -v pp="$PARRAFO" -v num="$NUM" \
         -v ct="$C_TXT" -v cl="$C_TIT" -v cn="$C_NUM" -v off="$C_OFF" \
         -v mapa="$TMP/mapa" -v ital="$CURSIVA" -v com="$COMILLAS" '
     # Ademas del texto escribe un mapa: por cada linea de salida, el numero de
@@ -847,6 +861,8 @@ procesar_tecla() {
       if [ "$RATON" -eq 1 ]; then raton_on; else raton_off; fi ;;
   +)  INTER=$((INTER+1));     [ "$INTER" -gt 3 ]   && INTER=3;   marcar_conf; render ;;
   -)  INTER=$((INTER-1));     [ "$INTER" -lt 0 ]   && INTER=0;   marcar_conf; render ;;
+  s)  SANGRIA=$((SANGRIA+1)); [ "$SANGRIA" -gt 8 ] && SANGRIA=8; marcar_conf; render ;;
+  S)  SANGRIA=$((SANGRIA-1)); [ "$SANGRIA" -lt 0 ] && SANGRIA=0; marcar_conf; render ;;
   .)  PARRAFO=$((PARRAFO+1)); [ "$PARRAFO" -gt 6 ] && PARRAFO=6; marcar_conf; render ;;
   ,)  PARRAFO=$((PARRAFO-1)); [ "$PARRAFO" -lt 0 ] && PARRAFO=0; marcar_conf; render ;;
   '>') ANCHO=$((ANCHO+4));    [ "$ANCHO" -gt 120 ] && ANCHO=120; marcar_conf; render ;;
