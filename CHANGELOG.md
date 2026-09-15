@@ -16,6 +16,9 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Corregido
 
+- Las teclas pulsadas mientras el programa arrancaba se perdían: el descarte de
+  las respuestas del terminal se llevaba también lo tecleado. Ahora se guardan y
+  se procesan en cuanto el lector está listo.
 - Al volver de ver una ilustración quedaban restos de la imagen bajo el texto.
   Los gráficos sixel no se borran con las secuencias de borrado de texto: hace
   falta limpiar la pantalla entera, y ahora se hace al pasar de una ilustración

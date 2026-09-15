@@ -196,6 +196,12 @@ bytes: `cut -c` parte los multibyte y ensucia la linea.
 
 Con `PDFTERM_LOG` apuntando a un fichero se anota cada tecla recibida
 (`registrar()`), que es la forma de averiguar que llega cuando pasa algo raro.
+
+`drenar_entrada()` descarta solo lo que empieza por ESC, que son las respuestas
+del terminal; lo demas lo guarda en `COLA` para que `leer_tecla()` lo procese.
+Descartarlo todo hacia que una tecla pulsada durante el arranque se perdiera, y
+como el arranque dura mas cuando hay que aprender las cabeceras, fallaba de
+forma intermitente.
 Sin la variable no hace nada.
 
 ## Convenciones

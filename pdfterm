@@ -238,9 +238,21 @@ CELDA_W=8; CELDA_H=8
 # algo al terminal: si su respuesta llega tarde y no se consume, sus bytes se
 # leen despues como teclas sueltas y disparan comandos ('0' alterna los
 # numeros, 't' cambia el tema), con lo que la pantalla se descuadra sola.
+# Lo que se teclea mientras el programa arranca se guarda para procesarlo
+# despues; solo se descartan las respuestas del terminal, que empiezan por ESC.
+# Descartarlo todo hacia que una tecla pulsada durante el arranque se perdiera.
+COLA=""
 drenar_entrada() {
-  local basura
-  while IFS= read -rsn1 -t 0.02 basura 2>/dev/null; do :; done
+  local c d
+  while IFS= read -rsn1 -t 0.02 c 2>/dev/null; do
+    if [ "$c" = $'\033' ]; then
+      while IFS= read -rsn1 -t 0.05 d 2>/dev/null; do
+        case "$d" in [A-Za-z~]) break ;; esac
+      done
+    else
+      COLA+="$c"
+    fi
+  done
   return 0
 }
 
@@ -743,6 +755,11 @@ registrar() { [ -n "${PDFTERM_LOG:-}" ] && printf '%s %s\n' "$(date +%H:%M:%S.%N
 
 leer_tecla() {
   local c d e sec rc espera="${1:-}"
+  if [ -n "$COLA" ]; then
+    c="${COLA:0:1}"; COLA="${COLA:1}"
+    TECLA="$c"; registrar "tecla [$c] (de la cola del arranque)"
+    return 0
+  fi
   if [ -n "$espera" ]; then
     IFS= read -rsn1 -t "$espera" c || return 1
   else
