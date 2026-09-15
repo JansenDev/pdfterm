@@ -775,11 +775,15 @@ leer_tecla() {
     return 0
   fi
   if [ -n "$espera" ]; then
-    IFS= read -rsn1 -t "$espera" c || return 1
+    c=""
+    IFS= read -rsn1 -t "$espera" c; rc=$?
+    [ "$rc" -ne 0 ] && [ -z "$c" ] && return 1
   else
     while :; do
+      c=""
       IFS= read -rsn1 -t 0.4 c; rc=$?
       [ "$rc" -eq 0 ] && break
+      [ -n "$c" ] && break                  # llego justo al expirar el tiempo
       if [ "$rc" -gt 128 ]; then volcar_conf; continue; fi   # 0,4 s sin pulsar
       return 1                                               # fin de entrada
     done
@@ -791,10 +795,15 @@ leer_tecla() {
   # despues como teclas sueltas: en "\033[<65;20;10M" el '<' estrecha la
   # columna y el '0' alterna los numeros, y la pantalla se descuadraba. Por eso
   # el margen es amplio: los bytes de una secuencia llegan siempre juntos.
-  IFS= read -rsn1 -t 1 d || { TECLA=esc; registrar "ESC suelto (sin segundo byte)"; return 0; }
+  d=""
+  IFS= read -rsn1 -t 1 d
+  [ -z "$d" ] && { TECLA=esc; registrar "ESC suelto (sin segundo byte)"; return 0; }
   [ "$d" != "[" ] && { TECLA=esc; registrar "ESC+[$d] no reconocido"; return 0; }
   sec=""
-  while IFS= read -rsn1 -t 1 e; do
+  while :; do
+    e=""
+    IFS= read -rsn1 -t 1 e
+    [ -z "$e" ] && break
     sec+="$e"
     case "$e" in [A-Za-z~]) break ;; esac
     [ "${#sec}" -gt 24 ] && break        # secuencia anomala: se descarta

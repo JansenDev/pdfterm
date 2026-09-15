@@ -18,6 +18,10 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 
 ### Corregido
 
+- El ancho de columna se reducía solo al desplazarse con la rueda. `read` con
+  tiempo de espera puede consumir el byte y devolver error a la vez: si se
+  descarta, el `ESC` de una secuencia del ratón se pierde y sus bytes se leen
+  como teclas, donde `<` estrecha la columna.
 - Las teclas pulsadas mientras el programa arrancaba se perdían: el descarte de
   las respuestas del terminal se llevaba también lo tecleado. Ahora se guardan y
   se procesan en cuanto el lector está listo.
