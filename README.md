@@ -92,6 +92,7 @@ Las teclas actúan al pulsarlas, sin Enter:
 | `g`              | Ir a una página concreta             |
 | `/`              | Buscar texto en el libro             |
 | `c` / `C`        | Cursivas / entrecomillarlas          |
+| `?`              | Ver todos los atajos                 |
 | `q`              | Salir                                |
 
 La lista completa está en [SHORTCUTS.md](SHORTCUTS.md).

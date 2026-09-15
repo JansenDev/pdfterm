@@ -232,8 +232,8 @@ IMGF="$CACHE/$ID.img"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 LIBRO=$(basename "$F" | sed -E 's/\.[Pp][Dd][Ff]$//')
 
-AYUDA_IMG='[espacio]sig [p]ant [i]grande [I]lista [F]formato [h]cab [q]salir'
-AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i/I]magen [F]formato [c]cursiva [C]comillas · [+/-]inter [./,]parr [s/S]sangría [</>]ancho [#/0]num [t]ema [h]cab [r]raton [q]salir'
+AYUDA_IMG='[espacio]sig [p]ant [i]grande [I]lista [F]formato [h]cab [?]atajos [q]salir'
+AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i/I]magen [F]formato [c]cursiva [C]comillas · [+/-]inter [./,]parr [s/S]sangría [</>]ancho [#/0]num [t]ema [h]cab [r]raton [?]atajos [q]salir'
 
 # Tamaño de la celda del terminal en pixeles. chafa lo necesita para dibujar a
 # tamaño real, pero ConPTY no lo informa por ioctl, asi que se le pregunta al
@@ -840,6 +840,75 @@ render
 
 # Aplica la tecla ya leida. No repinta: de eso se encarga el bucle, que junta
 # las rafagas de la rueda en un solo repintado.
+# Pantalla con todos los atajos, en dos columnas si hay sitio. El texto va sin
+# colores para poder alinear contando caracteres; los titulos se resaltan
+# despues, que son las lineas que no empiezan por espacio.
+pantalla_atajos() {
+  local ancho_col
+  cat > "$TMP/at1" <<'IZQ'
+Moverse por el libro
+  espacio, n   página siguiente
+  p            página anterior
+  g            ir a una página concreta
+  /            buscar texto en el libro
+  q            salir
+
+Guía de lectura
+  l            encenderla o apagarla
+  j, k         bajar o subir un renglón
+  rueda        mover guía o página
+  clic         marcar ese renglón
+  L            estilo del resaltado
+  r            soltar el ratón
+
+Ilustraciones
+  i            verla a pantalla completa
+  I            páginas que tienen imagen
+  F            cambiar cómo se dibujan
+IZQ
+  cat > "$TMP/at2" <<'DER'
+Aspecto del texto
+  <  >         columna estrecha o ancha
+  -  +         espacio entre renglones
+  ,  .         espacio entre párrafos
+  S  s         sangría del párrafo
+  #  o  0      números de renglón
+  t            colores
+  h            barra de arriba
+
+Cursivas del libro
+  c            verlas en cursiva
+  C            encerrarlas entre comillas
+
+Desde la terminal
+  --config     editar los ajustes
+  --update     actualizar el programa
+  --uninstall  desinstalarlo
+DER
+
+  clear
+  printf '\033[1m  Atajos de pdfterm\033[0m\n\n'
+  ancho_col=$(( COLS / 2 ))
+  if [ "$COLS" -ge 76 ]; then
+    awk -v w="$ancho_col" '
+      NR == FNR { a[FNR] = $0; na = FNR; next }
+      { b[FNR] = $0; nb = FNR }
+      END {
+        n = (na > nb) ? na : nb
+        for (i = 1; i <= n; i++) {
+          izq = (i in a) ? a[i] : ""
+          if (length(izq) > w - 2) izq = substr(izq, 1, w - 2)
+          der = (i in b) ? b[i] : ""
+          printf "%s%s%s\n", izq, sprintf("%*s", (w - length(izq) > 0) ? w - length(izq) : 1, ""), der
+        }
+      }' "$TMP/at1" "$TMP/at2"
+  else
+    cat "$TMP/at1"; echo; cat "$TMP/at2"
+  fi | sed -E 's/^([^ ].*)$/\x1b[1m\1\x1b[0m/'
+  printf '\n\033[2m  Lo que cambies se guarda solo. Pulsa una tecla para volver.\033[0m'
+  leer_tecla
+}
+
 procesar_tecla() {
   registrar "  procesa $TECLA (pag $PAG marca $MARCA)"
   case "$TECLA" in
@@ -925,6 +994,7 @@ procesar_tecla() {
                && { PAG=$RESP; MARCA=1; VISTA=1; render; }
         fi
       fi ;;
+  '?') pantalla_atajos ;;
   q)  clear; SALIR=1 ;;
   esac
 }

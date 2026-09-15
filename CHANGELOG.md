@@ -12,6 +12,8 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 - `pdfterm --uninstall` desinstala el programa, preguntando antes si borrar
   también los ajustes y los puntos de lectura. Con `--purge` lo borra todo sin
   preguntar. Si se instaló con el paquete, remite a `apt`.
+- La tecla `?` muestra todos los atajos en pantalla, agrupados y con
+  descripciones, en dos columnas si la ventana da de sí.
 - Sangría de la primera línea de cada párrafo, ajustable con `s` y `S`. Con
   `PARRAFO=0` permite distinguir los párrafos sin gastar una línea en blanco.
 - `pdfterm --version` y `pdfterm --help`.

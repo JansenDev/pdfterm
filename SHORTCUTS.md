@@ -24,6 +24,7 @@ algo son `g` (número de página) y `/` (texto a buscar).
 | `p`, `←` | Página anterior |
 | `g` | Ir a una página concreta (pide el número) |
 | `/` | Buscar texto en todo el libro |
+| `?` | Ver todos los atajos en pantalla |
 | `q` | Salir |
 
 Al cambiar de página la vista vuelve siempre al principio.
