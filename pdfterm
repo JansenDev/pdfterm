@@ -719,11 +719,14 @@ scroll_pagina() {
     antes=$VISTA
     scroll_vista $(( $1 * paso ))
     [ "$VISTA" -eq "$antes" ] && break        # ya esta en el tope
-    [ "$GUIA" -eq 1 ] && guia_al_primer_visible
     mostrar
     restante=$(( restante - paso ))
     [ "$restante" -gt 0 ] && [ "$SCROLL_PAUSA" != 0 ] && sleep "$SCROLL_PAUSA"
   done
+  # La guia se recoloca una sola vez, al terminar, y solo si se ha quedado
+  # fuera de la vista. Cerca del final de la pagina esta apenas baja, asi que
+  # el renglon por el que se iba sigue viendose y no hay por que moverlo.
+  [ "$GUIA" -eq 1 ] && guia_a_la_vista
   return 0
 }
 
