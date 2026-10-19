@@ -297,7 +297,7 @@ medir_terminal() {
   local t
   # stty contra /dev/tty es fiable aunque la entrada este redirigida; tput
   # se queda con el valor de terminfo (24x80) en cuanto stdin no es el terminal.
-  if t=$(stty size </dev/tty 2>/dev/null) && [ -n "$t" ]; then
+  if { t=$(stty size </dev/tty); } 2>/dev/null && [ -n "$t" ]; then
     LINEAS="${t%% *}"; COLS="${t##* }"
   else
     COLS=$(tput cols  2>/dev/null) || COLS=80
@@ -415,7 +415,10 @@ filtrar() {
       if (!(n in hdr)) print }'
 }
 
-recortar() { awk -v n="$1" '{ print substr($0, 1, n) }'; }
+# En bash, ${v:0:n} cuenta caracteres, no bytes, asi que no parte los acentos.
+# Se evita asi un awk por cada linea de la cabecera: lanzar un proceso cuesta
+# tres cuartos de milisegundo, mas que todo el trabajo que hace.
+recortar() { local v; IFS= read -r v; printf '%s' "${v:0:$1}"; }
 
 cabecera() {
   local p=$1 ajustes libro max
@@ -430,19 +433,19 @@ cabecera() {
   fi
   # Con una ilustracion en pantalla, una sola linea para dejarle sitio
   if [ "$TIPO" = img ] && [ "$CABECERA" != oculta ]; then
-    printf '\033[2m%s\033[0m\n' \
+    printf '\033[2m%s\033[0m\033[K\n' \
       "$(printf '%s · pág %d/%d · ilustración' "$libro" "$p" "$TOTAL" | cut -c1-"$(( $COLS - 1 ))")"
     return
   fi
   case "$CABECERA" in
     oculta)   : ;;
-    minima)   printf '\033[2m%s\033[0m\n\n' "$(printf '%s · %d/%d' "$LIBRO" "$p" "$TOTAL" | recortar "$max")" ;;
-    compacta) printf '\033[2m%s\033[0m\n' \
+    minima)   printf '\033[2m%s\033[0m\033[K\n\033[K\n' "$(printf '%s · %d/%d' "$LIBRO" "$p" "$TOTAL" | recortar "$max")" ;;
+    compacta) printf '\033[2m%s\033[0m\033[K\n' \
                      "$(printf '%s · pág %d/%d · %s' "$libro" "$p" "$TOTAL" "$ajustes" | recortar "$max")" ;;
-    *)        printf '\033[1m%s\033[0m\n' "$(printf '%s' "$LIBRO" | recortar "$max")"
-              printf '\033[2m%s\033[0m\n' \
+    *)        printf '\033[1m%s\033[0m\033[K\n' "$(printf '%s' "$LIBRO" | recortar "$max")"
+              printf '\033[2m%s\033[0m\033[K\n' \
                      "$(printf 'página %d de %d · %s' "$p" "$TOTAL" "$ajustes" | recortar "$max")"
-              printf '\033[2m%*s\033[0m\n' "$max" '' | tr ' ' '_' ;;
+              printf '\033[2m%*s\033[0m\033[K\n' "$max" '' | tr ' ' '_' ;;
   esac
 }
 
@@ -532,7 +535,7 @@ formatear() {
             ABRE  = com ? "\"" ITAL : ITAL          # comilla fuera de la cursiva
             CIERRA = com ? RECTO "\"" : RECTO
             printf "" > mapa }
-    /^[[:space:]]*$/ { for (i = 0; i < pp - il; i++) { print ""; print 0 > mapa } next }
+    /^[[:space:]]*$/ { for (i = 0; i < pp - il; i++) { printf "\033[K\n"; print 0 > mapa } next }
     {
       n++
       # Cursivas: se reabre el tramo si venia de la linea anterior
@@ -542,9 +545,9 @@ formatear() {
       cur = (cur + abre - cierra > 0) ? 1 : 0
       pre = num ? sprintf("%s%3d \342\224\202 " off, cn, n) : ""
       c = ($0 ~ /^(\033\[3m)?(Capítulo|Capitulo|CAPÍTULO|Prólogo|Epílogo|Parte|Volumen|Arco)/) ? cl : ct
-      printf "%*s%s%s%s%s\n", m, "", pre, c, $0, off
+      printf "%*s%s%s%s%s\033[K\n", m, "", pre, c, $0, off
       print n > mapa
-      for (i = 0; i < il; i++) { print ""; print 0 > mapa }
+      for (i = 0; i < il; i++) { printf "\033[K\n"; print 0 > mapa }
     }'
 }
 
@@ -740,7 +743,8 @@ mostrar() {
     clear; cabecera "$PAG"; render_img "$PAG"; return
   fi
   calcular_alto
-  { cabecera "$PAG"
+  { printf '\033[?2026h%s\033[H' "$limpiar"
+    cabecera "$PAG"
     sed -n "${VISTA},$(( VISTA + ALTO - 1 ))p" "$TMP/pagina" \
       | awk -v lm="$([ "$GUIA" -eq 1 ] && echo "$LM" || echo 0)" \
             -v v="$VISTA" -v cm="$C_MRK" -v off="$C_OFF" -v estilo="$GUIA_ESTILO" '
@@ -768,19 +772,14 @@ mostrar() {
               print cm $0 off
             }
           }'
-  } | sed 's/$/\x1b[K/' > "$TMP/vista.tmp"
-  # Completar con lineas vacias para que la barra quede siempre a la misma altura
-  local pintadas faltan
-  pintadas=$(wc -l < "$TMP/vista.tmp")
-  faltan=$(( ALTO + $(alto_cabecera) - pintadas ))
-  while [ "$faltan" -gt 0 ]; do printf '\033[K\n' >> "$TMP/vista.tmp"; faltan=$(( faltan - 1 )); done
-
-  # Todo el repintado va en una sola escritura y entre marcas de salida
-  # sincronizada (DEC 2026): asi el terminal no refresca a medias y no se ve
-  # el barrido del texto al desplazarse. Los terminales que no la soportan
-  # ignoran las secuencias.
-  { printf '\033[?2026h%s\033[H' "$limpiar"
-    cat "$TMP/vista.tmp"
+    # Las lineas que faltan para que la barra quede siempre a la misma altura.
+    # Se calculan, no se cuentan: contar con wc costaba un proceso entero.
+    local visibles faltan
+    visibles=$(( TOTLIN - VISTA + 1 ))
+    [ "$visibles" -gt "$ALTO" ] && visibles=$ALTO
+    [ "$visibles" -lt 0 ] && visibles=0
+    faltan=$(( ALTO - visibles ))
+    while [ "$faltan" -gt 0 ]; do printf '\033[K\n'; faltan=$(( faltan - 1 )); done
     # La barra va dentro del mismo fotograma. Pintarla aparte, despues del
     # borrado, dejaba un instante con la pantalla a medias en cada repintado.
     if [ "$TIPO" = img ]; then printf '\033[2m%s\033[0m\033[J\033[?2026l' "$(ayuda_actual)"

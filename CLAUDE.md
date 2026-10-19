@@ -141,6 +141,27 @@ dependencias solo por eso.
 En las paginas de ilustracion, `alto_cabecera()` devuelve 1 y se usa `AYUDA_IMG`
 en vez de `AYUDA`, para dejarle a la imagen todas las filas posibles.
 
+## Rendimiento: el coste esta en lanzar procesos
+
+En WSL, lanzar un proceso cuesta unos **0,7 ms**, y el trabajo que hace sobre
+veinte lineas de texto es despreciable. Optimizar aqui es **quitar procesos**,
+no hacerlos mas rapidos. El repintado paso de 21 a 9 ms quitando tres:
+
+- El `\033[K` que borra el resto de cada linea se deja puesto al componer la
+  pagina en `formatear()`, en vez de añadirlo con un `sed` en cada repintado.
+- `recortar()` usa `${v:0:n}` de bash, que cuenta caracteres y no bytes igual
+  que el `awk` que sustituye.
+- Las lineas de relleno se **calculan** a partir de `TOTLIN` y `VISTA`, en vez
+  de contar las pintadas con `wc -l`.
+- El fotograma se arma en un unico fichero, no en dos.
+
+Quedan tres procesos por repintado: el `sed` que recorta las lineas visibles,
+el `awk` que pinta la guia y el `cat` que vuelca el fotograma. Bajar de ahi
+pide un cambio de modelo: reescribir solo las lineas que cambian en vez del
+fotograma entero. Daria mucho (al mover la guia solo cambian dos lineas), pero
+el repintado completo con salida sincronizada es lo que resolvio el tearing y
+los descuadres, asi que no conviene tocarlo sin una buena razon.
+
 ## Precarga de paginas
 
 Extraer una pagina cuesta unos 120 ms: 60 de `pdftotext` y 60 de `pdftohtml`,

@@ -12,6 +12,9 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 - `pdfterm --uninstall` desinstala el programa, preguntando antes si borrar
   también los ajustes y los puntos de lectura. Con `--purge` lo borra todo sin
   preguntar. Si se instaló con el paquete, remite a `apt`.
+- Cada repintado es más del doble de rápido, de 21 a 9 ms, lo que se nota al
+  desplazarse con `f` y `b` y al mover la guía. Se consiguió quitando procesos:
+  en WSL lanzar uno cuesta 0,7 ms, más que todo el trabajo que hace.
 - Cambiar de página es diez veces más rápido, de 163 a 16 ms: mientras se lee
   se prepara la siguiente en segundo plano, y lo ya extraído se guarda, así que
   volver atrás con `p` también es inmediato. La preparación se lanza solo tras
