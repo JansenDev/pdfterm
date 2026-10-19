@@ -49,11 +49,17 @@ Encendida, el renglón activo se marca con `▸` y la vista se desplaza sola par
 que nunca quede fuera de pantalla.
 
 Con `f` y `b` te mueves una pantalla entera dentro de la página, sin tener que
-bajar renglón a renglón. El texto se desplaza de forma continua, no a saltos. La guía va contigo y queda arriba de la pantalla
-nueva, lista para seguir leyendo; se dejan dos renglones de solape para no
-perder el hilo. Al llegar al final de la página se detiene: para cambiar de
-página, `espacio`. Apagada, la rueda desplaza tres líneas por
-giro y no hay nada resaltado.
+bajar renglón a renglón. El texto se desplaza de forma continua, no a saltos, y
+se dejan dos renglones de solape para no perder el hilo.
+
+La guía solo se mueve si hace falta: si el renglón por el que ibas sigue
+viéndose tras el desplazamiento —lo normal cerca del final de la página, donde
+la vista apenas baja—, se queda donde está; si queda fuera, pasa al primer
+renglón visible. Al llegar al final de la página se detiene: para cambiar de
+página, `espacio`.
+
+Con la guía apagada, la rueda desplaza tres líneas por giro y no hay ningún
+renglón resaltado.
 
 **Cada libro recuerda su guía.** Si la enciendes en un libro, ese libro la abre
 encendida la próxima vez; los demás mantienen la suya. Un libro que abres por
