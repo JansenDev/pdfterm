@@ -141,6 +141,36 @@ dependencias solo por eso.
 En las paginas de ilustracion, `alto_cabecera()` devuelve 1 y se usa `AYUDA_IMG`
 en vez de `AYUDA`, para dejarle a la imagen todas las filas posibles.
 
+## Precarga de paginas
+
+Extraer una pagina cuesta unos 120 ms: 60 de `pdftotext` y 60 de `pdftohtml`,
+que abren el PDF por separado. El procesado propio (reflow, `fmt`, numeracion)
+son 2 ms, asi que ahi no hay nada que rascar.
+
+Lo extraido se guarda en `$TMP/p.<n>.txt` y `$TMP/p.<n>.cur`, y `precargar()`
+prepara la siguiente pagina en segundo plano. El disparador es el plazo de
+`read` que ya existia para volcar la configuracion: **solo se precarga tras
+0,4 s sin pulsar nada**. Pasando paginas deprisa no se lanza nada, que seria
+trabajo tirado; al pararse a leer, la siguiente queda lista. `render()` cancela
+la precarga pendiente antes de empezar, para que no compita con la pagina que
+se esta esperando.
+
+Dos detalles que no se pueden omitir:
+
+- **El subshell de la precarga necesita `trap - EXIT`.** Sin eso hereda el trap
+  del programa y al terminar borra el directorio temporal entero y restaura el
+  terminal. Costo un rato entender por que la cache no aparecia.
+- **Se escribe en un `.tmp` y se renombra al terminar.** Si la precarga se
+  cancela a medias, lo que queda es un fichero incompleto que nadie lee.
+
+La cache del texto no depende de ningun ajuste. La de los tramos en cursiva si
+depende de `CURSIVA` y `COMILLAS`, por eso las teclas `c` y `C` llaman a
+`olvidar_cursivas()`.
+
+Medir esto desde fuera, cronometrando el proceso entero, no sirve: los sleeps
+de la prueba y los hijos en segundo plano enmascaran el resultado. Lo que vale
+es registrar el principio y el final de `render()` con `PDFTERM_LOG`.
+
 ## Cursivas: por que hacen falta dos herramientas
 
 `pdftotext` descarta el formato, asi que no sabe que va en cursiva. `pdftohtml`

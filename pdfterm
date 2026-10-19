@@ -365,6 +365,49 @@ if [ ! -f "$HDRF" ]; then
        | awk '$1>=6 { sub(/^[[:space:]]*[0-9]+[[:space:]]/, ""); print }' > "$HDRF"
 fi
 
+# Extraer una pagina cuesta unos 120 ms (pdftotext y pdftohtml, 60 cada uno),
+# que es casi todo el tiempo de cambiar de pagina. Se guarda lo extraido para
+# no repetirlo al volver atras, y se prepara la siguiente mientras se lee.
+# El texto no depende de ningun ajuste; los tramos en cursiva si de CURSIVA y
+# COMILLAS, asi que al cambiarlas hay que tirar esa parte de la cache.
+extraer_a_cache() {
+  local p=$1 t="$TMP/p.$1.txt" c="$TMP/p.$1.cur"
+  # Se escribe aparte y se renombra al terminar: si la precarga se cancela a
+  # medias, lo que queda es un .tmp que nadie llega a leer.
+  [ -s "$t" ] || { extraer_pagina  "$p" > "$t.tmp" 2>/dev/null; mv -f "$t.tmp" "$t"; }
+  [ -f "$c" ] || { extraer_cursivas "$p" > "$c.tmp" 2>/dev/null; mv -f "$c.tmp" "$c"; }
+}
+
+# Los tramos en cursiva guardados dejan de valer si se cambia como se muestran
+olvidar_cursivas() { rm -f "$TMP"/p.*.cur; return 0; }
+
+PRECARGA_PID=""
+cancelar_precarga() {
+  if [ -n "$PRECARGA_PID" ]; then
+    # Solo se mata el subshell; el pdftotext que tenga abierto termina solo en
+    # unos milisegundos y escribe en un .tmp que ya no se usa.
+    kill "$PRECARGA_PID" 2>/dev/null
+    wait "$PRECARGA_PID" 2>/dev/null
+    PRECARGA_PID=""
+  fi
+  return 0
+}
+
+# Prepara una pagina en segundo plano. Se llama cuando pasan unas decimas sin
+# tocar ninguna tecla: mientras se pasan paginas deprisa no se lanza nada, que
+# seria trabajo tirado.
+precargar() {
+  local p=$1
+  [ "$p" -ge 1 ] && [ "$p" -le "$TOTAL" ] || return 0
+  [ -s "$TMP/p.$p.txt" ] && [ -f "$TMP/p.$p.cur" ] && return 0
+  [ -n "$PRECARGA_PID" ] && kill -0 "$PRECARGA_PID" 2>/dev/null && return 0
+  # Sin quitarle el trap, al acabar el subshell ejecutaria el de EXIT del
+  # programa: borraria el directorio temporal y restauraria el terminal.
+  ( trap - EXIT; extraer_a_cache "$p" ) &
+  PRECARGA_PID=$!
+  return 0
+}
+
 filtrar() {
   awk -v h="$HDRF" '
     BEGIN { while ((getline l < h) > 0) if (length(l)) hdr[l]=1 }
@@ -565,8 +608,10 @@ alto_cabecera() {
 
 render() {
   local txt
-  txt=$(extraer_pagina "$PAG" | filtrar | sed '/^[[:space:]]*$/d')
-  extraer_cursivas "$PAG" > "$TMP/cursivas"
+  cancelar_precarga            # que no compita con lo que se esta esperando
+  extraer_a_cache "$PAG"
+  txt=$(filtrar < "$TMP/p.$PAG.txt" | sed '/^[[:space:]]*$/d')
+  cp -f "$TMP/p.$PAG.cur" "$TMP/cursivas" 2>/dev/null || : > "$TMP/cursivas"
   if [ "${#txt}" -lt 120 ]; then
     TIPO=img; : > "$TMP/pagina"; : > "$TMP/mapa"; RENGLONES=0; TOTLIN=0
   else
@@ -819,7 +864,11 @@ leer_tecla() {
       IFS= read -rsn1 -t 0.4 c; rc=$?
       [ "$rc" -eq 0 ] && break
       [ -n "$c" ] && break                  # llego justo al expirar el tiempo
-      if [ "$rc" -gt 128 ]; then volcar_conf; continue; fi   # 0,4 s sin pulsar
+      if [ "$rc" -gt 128 ]; then
+        volcar_conf                        # 0,4 s sin pulsar: se aprovecha
+        precargar $(( PAG + 1 ))           # para dejar lista la siguiente
+        continue
+      fi
       return 1                                               # fin de entrada
     done
   fi
@@ -997,8 +1046,8 @@ procesar_tecla() {
         && { PAG=$RESP; MARCA=1; VISTA=1; render; } ;;
   i)  clear; render_img "$PAG" $(( $LINEAS - 2 )); pedir "Enter para volver > "
       TIPO_PREV=img ;;
-  c)  CURSIVA=$(( 1 - CURSIVA )); marcar_conf; render ;;
-  C)  COMILLAS=$(( 1 - COMILLAS )); marcar_conf; render ;;
+  c)  CURSIVA=$(( 1 - CURSIVA )); marcar_conf; olvidar_cursivas; render ;;
+  C)  COMILLAS=$(( 1 - COMILLAS )); marcar_conf; olvidar_cursivas; render ;;
   F)  case "$IMG_FORMATO" in
         auto)    IMG_FORMATO=sixels ;;
         sixels)  IMG_FORMATO=kitty ;;

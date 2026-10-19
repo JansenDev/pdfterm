@@ -12,6 +12,11 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 - `pdfterm --uninstall` desinstala el programa, preguntando antes si borrar
   también los ajustes y los puntos de lectura. Con `--purge` lo borra todo sin
   preguntar. Si se instaló con el paquete, remite a `apt`.
+- Cambiar de página es diez veces más rápido, de 163 a 16 ms: mientras se lee
+  se prepara la siguiente en segundo plano, y lo ya extraído se guarda, así que
+  volver atrás con `p` también es inmediato. La preparación se lanza solo tras
+  unas décimas sin pulsar nada, de modo que pasar páginas deprisa no dispara
+  trabajo que se tiraría.
 - `f` y `b` desplazan una pantalla dentro de la página, sin recorrerla renglón
   a renglón, con el texto moviéndose de forma continua en vez de a saltos. La guía de lectura acompaña a la vista y queda en el primer
   renglón visible.
