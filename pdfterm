@@ -723,10 +723,9 @@ scroll_pagina() {
     restante=$(( restante - paso ))
     [ "$restante" -gt 0 ] && [ "$SCROLL_PAUSA" != 0 ] && sleep "$SCROLL_PAUSA"
   done
-  # La guia se recoloca una sola vez, al terminar, y solo si se ha quedado
-  # fuera de la vista. Cerca del final de la pagina esta apenas baja, asi que
-  # el renglon por el que se iba sigue viendose y no hay por que moverlo.
-  [ "$GUIA" -eq 1 ] && guia_a_la_vista
+  # La guia no se toca: marca por donde se iba leyendo, y desplazarse es solo
+  # echar un vistazo. Puede quedar fuera de la vista; en cuanto se mueva con j
+  # o k, seguir_marca() devuelve la pantalla a ella.
   return 0
 }
 

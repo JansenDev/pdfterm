@@ -17,8 +17,9 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
   volver atrás con `p` también es inmediato. La preparación se lanza solo tras
   unas décimas sin pulsar nada, de modo que pasar páginas deprisa no dispara
   trabajo que se tiraría.
-- Al desplazarse con `f` cerca del final de la página, la guía saltaba al
-  primer renglón visible aunque el renglón por el que ibas siguiera viéndose.
+- La guía se movía sola al desplazarse con `f` y `b`. Ahora se queda en su
+  renglón: marca por dónde ibas leyendo, y la vista vuelve a ella en cuanto la
+  mueves con `j` o `k`.
 - `f` y `b` desplazan una pantalla dentro de la página, sin recorrerla renglón
   a renglón, con el texto moviéndose de forma continua en vez de a saltos. La guía de lectura acompaña a la vista y queda en el primer
   renglón visible.

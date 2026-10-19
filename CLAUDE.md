@@ -227,20 +227,18 @@ repintado cuesta unos 20 ms, que ya son unas 47 imagenes por segundo, y meter
 un `sleep` solo añadia el coste de lanzar el proceso (otros 15 ms por
 fotograma) sin ganar suavidad.
 
-`scroll_pagina()` recoloca la guia **una sola vez, al terminar** el
-desplazamiento, con `guia_a_la_vista()`: respeta el renglon si sigue viendose y
-solo lo cambia si ha quedado fuera. Dos errores que ya se cometieron y conviene
-no repetir:
+`scroll_pagina()` **no toca la guia**. La guia marca por donde se va leyendo y
+desplazarse es solo echar un vistazo, asi que puede quedar fuera de la vista;
+en cuanto se mueva con j o k, `seguir_marca()` devuelve la pantalla a ella, que
+es el comportamiento que se quiere.
 
-- **Llamarla dentro del bucle de fotogramas.** Como cada paso mueve dos
-  renglones, la guia se recolocaba en todos y acababa siempre arriba.
-- **Usar `guia_al_primer_visible()`.** Cerca del final de la pagina la vista
-  solo baja lo que queda, el renglon marcado sigue viendose, y moverlo obliga
-  al lector a buscar otra vez por donde iba.
+Se probaron antes otras dos formas y ninguna valia:
 
-Lo que si es obligatorio es que la guia acabe dentro de la vista:
-`seguir_marca()` tira de la vista hacia la marca, asi que si se queda fuera, el
-siguiente j o k devolveria la pantalla de golpe al renglon marcado.
+- **Recolocarla en cada fotograma** de la animacion: como cada paso mueve dos
+  renglones, acababa arrastrada hasta arriba siempre.
+- **Recolocarla al primer renglon visible** al terminar: cerca del final de la
+  pagina la vista solo baja lo que queda, el renglon marcado se seguia viendo,
+  y moverlo obligaba a buscar otra vez por donde se iba.
 
 La cabecera se recorta al ancho de la ventana (`recortar()`), y el ancho del
 texto se limita al hueco disponible. Sin eso, en un panel estrecho la cabecera
