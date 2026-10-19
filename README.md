@@ -86,13 +86,14 @@ Las teclas actúan al pulsarlas, sin Enter:
 |------------------|--------------------------------------|
 | `espacio`, `→`   | Página siguiente                     |
 | `p`, `←`         | Página anterior                      |
+| `f` / `b`        | Bajar o subir una pantalla           |
 | `l`              | Encender o apagar la guía de lectura |
 | rueda, `j` `k`   | Mover la guía, o desplazar la página |
 | clic izquierdo   | Poner la guía en ese renglón         |
 | `g`              | Ir a una página concreta             |
 | `/`              | Buscar texto en el libro             |
 | `c` / `C`        | Cursivas / entrecomillarlas          |
-| `?`              | Ver todos los atajos                 |
+| `h` o `?`        | Ver todos los atajos                 |
 | `q`              | Salir                                |
 
 La lista completa está en [SHORTCUTS.md](SHORTCUTS.md).

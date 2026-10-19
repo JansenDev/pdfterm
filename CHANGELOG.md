@@ -12,6 +12,16 @@ y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 - `pdfterm --uninstall` desinstala el programa, preguntando antes si borrar
   también los ajustes y los puntos de lectura. Con `--purge` lo borra todo sin
   preguntar. Si se instaló con el paquete, remite a `apt`.
+- `f` y `b` desplazan una pantalla dentro de la página, sin recorrerla renglón
+  a renglón, con el texto moviéndose de forma continua en vez de a saltos. La guía de lectura acompaña a la vista y queda en el primer
+  renglón visible.
+- La barra inferior ya no lista todos los atajos: queda en `[h] atajos ·
+  [q] salir`, y la lista completa se abre con `h` o `?`. Con eso el texto gana
+  una fila de pantalla.
+- El estilo de la cabecera pasa de la tecla `h` a `H`, para que `h` abra la
+  ayuda.
+- La pantalla de atajos explica cómo cambiar el tamaño de letra, que depende
+  del terminal.
 - La tecla `?` muestra todos los atajos en pantalla, agrupados y con
   descripciones, en dos columnas si la ventana da de sí.
 - Sangría de la primera línea de cada párrafo, ajustable con `s` y `S`. Con

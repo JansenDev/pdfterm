@@ -22,9 +22,10 @@ algo son `g` (número de página) y `/` (texto a buscar).
 |---|---|
 | `espacio`, `n`, `→` | Página siguiente |
 | `p`, `←` | Página anterior |
+| `f` / `b` | Bajar o subir una pantalla dentro de la página |
 | `g` | Ir a una página concreta (pide el número) |
 | `/` | Buscar texto en todo el libro |
-| `?` | Ver todos los atajos en pantalla |
+| `h` o `?` | Ver todos los atajos en pantalla |
 | `q` | Salir |
 
 Al cambiar de página la vista vuelve siempre al principio.
@@ -45,7 +46,13 @@ búsqueda tarda un par de segundos porque extrae todo el texto, y queda cacheada
 | rueda | Mover la guía, o desplazar la página si está apagada |
 
 Encendida, el renglón activo se marca con `▸` y la vista se desplaza sola para
-que nunca quede fuera de pantalla. Apagada, la rueda desplaza tres líneas por
+que nunca quede fuera de pantalla.
+
+Con `f` y `b` te mueves una pantalla entera dentro de la página, sin tener que
+bajar renglón a renglón. El texto se desplaza de forma continua, no a saltos. La guía va contigo y queda arriba de la pantalla
+nueva, lista para seguir leyendo; se dejan dos renglones de solape para no
+perder el hilo. Al llegar al final de la página se detiene: para cambiar de
+página, `espacio`. Apagada, la rueda desplaza tres líneas por
 giro y no hay nada resaltado.
 
 **Cada libro recuerda su guía.** Si la enciendes en un libro, ese libro la abre
@@ -88,6 +95,20 @@ como énfasis y se deja sin comillas.
 `pdftohtml`; por eso cambiar de página cuesta unos 60 ms más. Con las dos
 apagadas no se consulta y se ahorra ese tiempo.
 
+## Tamaño de letra
+
+Lo decide el terminal, no `pdfterm`: ningún programa puede cambiarlo en Windows
+Terminal. Con el lector abierto funcionan los atajos del propio terminal:
+
+| Atajo | Efecto |
+|---|---|
+| `Ctrl` + `-` | Letra más pequeña |
+| `Ctrl` + `+` | Letra más grande |
+| `Ctrl` + `0` | Tamaño normal |
+
+Al cambiarlo, el lector recoloca el texto solo: más filas y columnas, más texto
+por pantalla. Las ilustraciones también ganan, porque se dibujan en píxeles.
+
 ## Formato del texto
 
 | Tecla | Efecto | Valores |
@@ -99,7 +120,7 @@ apagadas no se consulta y se ahorra ese tiempo.
 | `#` o `0` | Numeración de renglones | sí / no |
 | `c` / `C` | Cursivas / comillas | sí / no |
 | `t` | Tema de color | suave → sepia → normal → propio |
-| `h` | Estilo de la cabecera | completa → compacta → mínima → oculta |
+| `H` | Estilo de la cabecera | completa → compacta → mínima → oculta |
 
 Todos se guardan al momento y valen para el próximo libro que abras.
 

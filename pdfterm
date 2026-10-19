@@ -232,8 +232,8 @@ IMGF="$CACHE/$ID.img"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 LIBRO=$(basename "$F" | sed -E 's/\.[Pp][Dd][Ff]$//')
 
-AYUDA_IMG='[espacio]sig [p]ant [i]grande [I]lista [F]formato [h]cab [?]atajos [q]salir'
-AYUDA='[espacio]sig [p]ant [j/k o rueda]mover [clic]marcar [l]guía [L]estilo [g]ir [/]buscar [i/I]magen [F]formato [c]cursiva [C]comillas · [+/-]inter [./,]parr [s/S]sangría [</>]ancho [#/0]num [t]ema [h]cab [r]raton [?]atajos [q]salir'
+AYUDA_IMG='[h] atajos · [i] imagen grande · [q] salir'
+AYUDA='[h] atajos · [q] salir'
 
 # Tamaño de la celda del terminal en pixeles. chafa lo necesita para dibujar a
 # tamaño real, pero ConPTY no lo informa por ioctl, asi que se le pregunta al
@@ -631,22 +631,57 @@ scroll_vista() {
   [ "$VISTA" -lt 1 ] && VISTA=1
 }
 
-# Al encender la guia se respeta el renglon donde estaba, si sigue a la vista.
+# Deja la guia dentro de lo que se esta viendo: respeta su renglon si sigue
+# visible, y si no lo coloca en el primero de la vista.
 # Solo cuando se ha desplazado lejos con la guia apagada se recoloca en el
 # primer renglon de lo que se esta viendo, que si no quedaria fuera de pantalla.
-guia_al_reactivar() {
-  local lm n
-  calcular_alto
-  lm="${MAPA_LM[$MARCA]:-}"
-  if [ -n "$lm" ] && [ "$lm" -ge "$VISTA" ] && [ "$lm" -le $(( VISTA + ALTO - 1 )) ]; then
-    seguir_marca; return
-  fi
+# Pone la guia en el primer renglon de lo que se esta viendo
+guia_al_primer_visible() {
+  local n
   n=$(sed -n "${VISTA},\$p" "$TMP/mapa" | grep -m1 -v '^0$')
   [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -gt 0 ] && MARCA=$n
   seguir_marca
 }
 
+guia_a_la_vista() {
+  local lm
+  calcular_alto
+  lm="${MAPA_LM[$MARCA]:-}"
+  if [ -n "$lm" ] && [ "$lm" -ge "$VISTA" ] && [ "$lm" -le $(( VISTA + ALTO - 1 )) ]; then
+    seguir_marca; return
+  fi
+  guia_al_primer_visible
+}
+
 TIPO_PREV=txt
+# Desplaza la vista una pantalla, de dos en dos renglones y repintando cada
+# paso, para que se vea bajar el texto en vez de cambiar de golpe. La guia va
+# con la vista: si se quedara atras, el siguiente j o k devolveria la pantalla
+# de golpe al renglon marcado. Se dejan dos renglones de solape para no perder
+# el hilo de la lectura.
+# Cada fotograma cuesta unos 20 ms de repintado, que ya dan unas 47 imagenes
+# por segundo: no hace falta pausa, y meterla solo añadia el coste de lanzar
+# sleep (unos 15 ms por fotograma) sin ganar suavidad.
+SCROLL_PASO=2      # renglones por fotograma
+SCROLL_PAUSA=0     # segundos entre fotogramas; 0 = sin pausa
+scroll_pagina() {
+  local salto restante paso antes
+  calcular_alto
+  salto=$(( ALTO - 2 )); [ "$salto" -lt 1 ] && salto=1
+  restante=$salto
+  while [ "$restante" -gt 0 ]; do
+    paso=$SCROLL_PASO; [ "$restante" -lt "$paso" ] && paso=$restante
+    antes=$VISTA
+    scroll_vista $(( $1 * paso ))
+    [ "$VISTA" -eq "$antes" ] && break        # ya esta en el tope
+    [ "$GUIA" -eq 1 ] && guia_al_primer_visible
+    mostrar
+    restante=$(( restante - paso ))
+    [ "$restante" -gt 0 ] && [ "$SCROLL_PAUSA" != 0 ] && sleep "$SCROLL_PAUSA"
+  done
+  return 0
+}
+
 mostrar() {
   local limpiar=""
   # Al pasar de una ilustracion a texto hay que borrar la pantalla entera: los
@@ -849,9 +884,11 @@ pantalla_atajos() {
 Moverse por el libro
   espacio, n   página siguiente
   p            página anterior
+  f, b         bajar o subir una pantalla
   g            ir a una página concreta
   /            buscar texto en el libro
   q            salir
+  h  o  ?      esta ayuda
 
 Guía de lectura
   l            encenderla o apagarla
@@ -874,11 +911,15 @@ Aspecto del texto
   S  s         sangría del párrafo
   #  o  0      números de renglón
   t            colores
-  h            barra de arriba
+  H            barra de arriba
 
 Cursivas del libro
   c            verlas en cursiva
   C            encerrarlas entre comillas
+
+Tamaño de letra (lo pone el terminal)
+  Ctrl -  Ctrl +   más pequeña o más grande
+  Ctrl 0           tamaño normal
 
 Desde la terminal
   --config     editar los ajustes
@@ -923,7 +964,7 @@ procesar_tecla() {
   L)  case "$GUIA_ESTILO" in marca) GUIA_ESTILO=linea ;; *) GUIA_ESTILO=marca ;; esac
       marcar_conf ;;
   l)  GUIA=$(( 1 - GUIA )); marcar_conf
-      [ "$GUIA" -eq 1 ] && guia_al_reactivar ;;
+      [ "$GUIA" -eq 1 ] && guia_a_la_vista ;;
   raton)
     case "$MB" in
       0)  [ "$GUIA" -eq 1 ] && [ "$MT" = "M" ] \
@@ -948,7 +989,7 @@ procesar_tecla() {
   '#'|0) NUM=$(( 1 - NUM )); marcar_conf; render ;;
   t)  case "$TEMA" in suave) TEMA=sepia;; sepia) TEMA=normal;; normal) TEMA=propio;; *) TEMA=suave;; esac
       paleta; marcar_conf; render ;;
-  h)  case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;
+  H)  case "$CABECERA" in completa) CABECERA=compacta;; compacta) CABECERA=minima;;
                           minima) CABECERA=oculta;; *) CABECERA=completa;; esac
       marcar_conf ;;
   g)  pedir "Ir a la página > "
@@ -994,7 +1035,9 @@ procesar_tecla() {
                && { PAG=$RESP; MARCA=1; VISTA=1; render; }
         fi
       fi ;;
-  '?') pantalla_atajos ;;
+  f)  scroll_pagina 1 ;;
+  b)  scroll_pagina -1 ;;
+  '?'|h) pantalla_atajos ;;
   q)  clear; SALIR=1 ;;
   esac
 }

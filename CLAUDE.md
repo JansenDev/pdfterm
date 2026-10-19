@@ -178,15 +178,30 @@ de las dos esta encendida, y cada una decide solo su parte al presentar.
 
 ## La barra de ayuda y el alto disponible
 
-La barra de ayuda mide unos 160 caracteres y en la mayoría de ventanas ocupa
-**dos filas**. `filas_ayuda()` calcula cuántas hace falta según el ancho, y
-`calcular_alto()` las descuenta. Reservar solo una hacía que se escribiera una
-fila de más, el terminal desplazaba y el repintado se veía como un rebote,
-sobre todo al llegar a los extremos de la página, donde el texto ya no cambia.
+La barra inferior es corta a propósito (`[h] atajos · [q] salir`): la lista
+completa vive en `pantalla_atajos()`, que se abre con `h` o `?`. Durante un
+tiempo la barra llevaba todos los atajos, medía unos 160 caracteres y ocupaba
+dos filas; cuando se tenga la tentación de volver a llenarla, mejor añadir el
+atajo a la pantalla de ayuda.
 
-Si se alarga la barra, no hay que tocar nada más: el cálculo se adapta solo.
-Lo que **no** hay que hacer es acortarla para que quepa en una fila; se probó y
-el usuario prefiere verla entera.
+Aun así `filas_ayuda()` calcula cuántas filas ocupa y `calcular_alto()` las
+descuenta. Reservar menos de las reales hace que se escriba una fila de más, el
+terminal desplaza y el repintado se ve como un rebote.
+
+Al añadir o cambiar una tecla hay que actualizar `pantalla_atajos()`, además de
+`SHORTCUTS.md`: es la única lista de atajos que ve quien usa el programa.
+
+`scroll_pagina()` repinta de dos en dos renglones hasta completar la pantalla,
+para que el texto se vea desplazarse. No lleva pausa entre fotogramas: el
+repintado cuesta unos 20 ms, que ya son unas 47 imagenes por segundo, y meter
+un `sleep` solo añadia el coste de lanzar el proceso (otros 15 ms por
+fotograma) sin ganar suavidad.
+
+`scroll_pagina()` mueve la vista una pantalla y **recoloca siempre la guia** en
+el primer renglon visible (`guia_al_primer_visible()`). No vale dejarla donde
+estaba: `seguir_marca()` tira de la vista hacia la marca, asi que al pulsar j o
+k despues la pantalla saltaria de golpe al renglon marcado. `guia_a_la_vista()`
+es distinta: respeta el renglon si sigue visible, y la usa la tecla `l`.
 
 La cabecera se recorta al ancho de la ventana (`recortar()`), y el ancho del
 texto se limita al hueco disponible. Sin eso, en un panel estrecho la cabecera
