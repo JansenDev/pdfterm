@@ -277,12 +277,47 @@ como el arranque dura mas cuando hay que aprender las cabeceras, fallaba de
 forma intermitente.
 Sin la variable no hace nada.
 
+## macOS: las utilidades son las de BSD
+
+El script cuenta con las GNU. En macOS fallan varias, y las peores no dan
+error. Al arrancar se resuelve cada herramienta en una variable y **todas las
+llamadas pasan por ella**; en Linux resuelven a la de siempre. No se bifurca
+por sistema operativo.
+
+- **`$FMT`** (`gfmt`, de coreutils). En el `fmt` de BSD `-c` significa
+  *centrar*, no *crown margin*, e ignora `-w`: la página sale sin reajustar
+  y sin avisar. Por eso al arrancar se comprueba que `$FMT --version` diga GNU.
+- **`$AWK`** (`gawk`). El `awk` de macOS es el de BSD aunque `gawk` esté
+  instalado, y no tiene `gensub()`. Arrancar `gawk` de Homebrew cuesta unos
+  5 ms (carga CoreFoundation y CoreServices a través de `gettext`), frente a
+  1,5 ms de cualquier otro proceso: es lo que más pesa en el repintado.
+- **`$READLINK`** (`greadlink`) y **`$MD5`** (`md5sum`, `gmd5sum` o `md5 -q`,
+  que dan el mismo hash).
+- **bash 4.** `/bin/bash` es la 3.2, sin `declare -A`. Si se arranca con ella,
+  lo primero que hace el script es relanzarse con el de Homebrew. Ese bloque
+  tiene que seguir siendo sintaxis de bash 3.2.
+- **`wc -l` rellena con espacios** a la izquierda: se envuelve en `$(( ))`, o
+  el valor se cuela con espacios en el texto de la cabecera.
+- **`sed` no entiende `\x1b`** en el reemplazo: el ESC se pasa con `$'\033'`.
+- `registrar()` saca la hora de `EPOCHREALTIME` y no de `date +%N`, que no
+  existe en los `date` de BSD antiguos.
+
+`stty -g` da otro formato en BSD, pero es autoconsistente: se ha comprobado que
+el terminal queda exactamente igual al salir. `od -An -tu1` da lo mismo.
+
+Medido en un MacBook (Apple Silicon) dentro de tmux, con un libro real:
+extraer una página nueva cuesta 66-73 ms, cambiar a una ya cacheada 35-40 ms y
+repintar 17-26 ms. Es el doble o el triple que en WSL por el coste de lanzar
+procesos, no por el trabajo que hacen.
+
 ## Convenciones
 
 - Comentarios y mensajes al usuario, en español.
 - Bash puro. No introducir Python, Node ni ninguna otra dependencia de lenguaje.
 - **`gawk`, no `mawk`.** `mawk` no maneja UTF-8 y rompe los acentos y el patrón
   que resalta `Capítulo`, `Prólogo` y `Epílogo`. Está declarado en `Depends`.
+- **Nunca `awk`, `fmt`, `readlink` ni `md5sum` a secas**: siempre `"$AWK"`,
+  `"$FMT"`, `"$READLINK"` y `$MD5`. Ver la sección de macOS.
 - Al añadir o cambiar una tecla, actualizar `SHORTCUTS.md` y la barra de ayuda
   del propio lector, no solo el README.
 - Toda preferencia nueva debe: tener valor por defecto arriba del script,

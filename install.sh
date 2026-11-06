@@ -50,6 +50,19 @@ for c in pdftotext pdfinfo pdftoppm; do
 done
 command -v gawk >/dev/null || FALTAN+=("gawk")
 command -v chafa >/dev/null || FALTAN+=("chafa")
+# En macOS fmt es el de BSD, donde -c centra el texto en vez de reajustarlo:
+# hace falta el de GNU, que viene en coreutils como gfmt. En Linux ya es GNU.
+fmt --version 2>/dev/null | grep -q GNU || command -v gfmt >/dev/null || FALTAN+=("coreutils")
+# El programa usa arrays asociativos (bash 4). macOS trae bash 3.2.
+bash_moderno() {
+  local b v
+  for b in /opt/homebrew/bin/bash /usr/local/bin/bash $(type -ap bash); do
+    v=$("$b" -c 'echo "${BASH_VERSINFO[0]}"' 2>/dev/null) || continue
+    [ "${v:-0}" -ge 4 ] 2>/dev/null && return 0
+  done
+  return 1
+}
+bash_moderno || FALTAN+=("bash")
 
 if [ "${#FALTAN[@]}" -gt 0 ]; then
   echo "    Faltan: ${FALTAN[*]}"
@@ -70,7 +83,7 @@ if [ "${#FALTAN[@]}" -gt 0 ]; then
   elif command -v pacman  >/dev/null; then ORDEN="${SUDO}pacman -Sy --needed --noconfirm ${FALTAN[*]}"
   elif command -v zypper  >/dev/null; then ORDEN="${SUDO}zypper install -y ${FALTAN[*]}"
   elif command -v apk     >/dev/null; then ORDEN="${SUDO}apk add --no-cache poppler-utils gawk chafa"
-  elif command -v brew    >/dev/null; then ORDEN="brew install poppler gawk chafa"
+  elif command -v brew    >/dev/null; then ORDEN="brew install ${FALTAN[*]/poppler-utils/poppler}"
   else echo "    No reconozco el gestor de paquetes. Instálalas a mano." >&2; exit 1
   fi
   echo "    Instalando: $ORDEN"
@@ -95,7 +108,9 @@ else
   URL="https://raw.githubusercontent.com/$REPO/$RAMA/pdfterm"
   CABECERA=()
   [ -n "${GITHUB_TOKEN:-}" ] && CABECERA=(-H "Authorization: token $GITHUB_TOKEN")
-  if ! curl -fsSL "${CABECERA[@]}" -o "$TMP/pdfterm" "$URL"; then
+  # Con set -u, el bash 3.2 de macOS da por no definido un array vacio: por eso
+  # se expande con ${...+...} en vez de "${CABECERA[@]}" sin mas.
+  if ! curl -fsSL ${CABECERA[@]+"${CABECERA[@]}"} -o "$TMP/pdfterm" "$URL"; then
     echo "    No se pudo descargar." >&2
     echo "    Si el repositorio es privado, pasa un token:" >&2
     echo "        GITHUB_TOKEN=\$(gh auth token) bash -c \"\$(curl -fsSL ... )\"" >&2

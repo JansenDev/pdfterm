@@ -17,6 +17,25 @@ En Debian y derivados:
 maneja UTF-8: los acentos saldrían rotos y no se resaltarían los títulos de
 capítulo. El paquete `.deb` y `install.sh` ya se encargan de exigirlo.
 
+### En macOS
+
+Las utilidades de serie son las de BSD y no sirven: el `awk` no tiene
+`gensub()`, en `fmt` la opción `-c` centra el texto en vez de reajustarlo, y
+`/bin/bash` es la 3.2, sin los arrays asociativos que usa el programa. Con
+Homebrew:
+
+    brew install poppler gawk chafa coreutils bash
+
+El programa busca solo `gawk`, `gfmt` y `greadlink` (de `coreutils`), y si se
+arranca con el bash viejo se relanza con el de Homebrew. `install.sh` instala
+lo que falte. Comprueba que el locale es UTF-8 (`locale` debe dar
+`es_ES.UTF-8` o `en_US.UTF-8`), o la columna sale descuadrada en los acentos.
+
+Para las ilustraciones hace falta un terminal con gráficos: Ghostty, kitty o
+WezTerm (protocolo de kitty) o iTerm2. **Terminal.app no dibuja imágenes**: el
+texto funciona igual, pero las ilustraciones salen como arte con caracteres.
+En iTerm2 conviene `IMG_FORMATO=iterm`.
+
 ## Métodos
 
 ### 1. Paquete .deb — Debian, Ubuntu, WSL
@@ -53,8 +72,9 @@ confirmación antes de instalar dependencias, y `--no-path` no toca tu perfil.
     cd pdfterm
     ./install.sh
 
-Comprueba qué falta y ofrece instalarlo con el gestor que encuentre (`apt`,
-`dnf`, `pacman`, `zypper` o `brew`), pidiendo confirmación antes de tocar nada.
+Comprueba qué falta y lo instala con el gestor que encuentre (`apt`, `dnf`,
+`pacman`, `zypper` o `brew`); con `--ask` pide confirmación antes. En macOS
+añade `coreutils` y `bash` si hacen falta.
 Instala en `~/.local/bin`, sin necesidad de root.
 
 Para todo el sistema:

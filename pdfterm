@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 # pdfterm — lector de PDF en la terminal, con formato de lectura ajustable.
+
+# Hacen falta arrays asociativos (declare -A), que llegaron con bash 4. macOS
+# trae bash 3.2 en /bin/bash: si se arranca con uno asi, se relanza con el
+# primer bash moderno que haya (el de Homebrew suele ir en las dos primeras).
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+  for b in /opt/homebrew/bin/bash /usr/local/bin/bash $(type -ap bash); do
+    v=$("$b" -c 'echo "${BASH_VERSINFO[0]}"' 2>/dev/null) || continue
+    [ "${v:-0}" -ge 4 ] 2>/dev/null && exec "$b" "$0" "$@"
+  done
+  echo "pdfterm necesita bash 4 o superior (este es $BASH_VERSION)." >&2
+  echo "En macOS: brew install bash" >&2
+  exit 1
+fi
 set -uo pipefail
 
 VERSION_PDFTERM=1.5.0
@@ -7,6 +20,23 @@ REPO_PDFTERM=JansenDev/pdfterm
 
 CACHE="$HOME/.local/share/pdfterm"; CONF="$HOME/.config/pdfterm"
 mkdir -p "$CACHE" "$CONF"; RCF="$CONF/config"
+
+# --- Herramientas -------------------------------------------------------------
+# El script cuenta con las versiones GNU. En macOS las de serie son las de BSD,
+# y fallan: unas con error y otras en silencio. Se resuelve cada una al arrancar
+# y se llama siempre a traves de la variable; en Linux todas dan la de siempre.
+#   AWK       gawk. El awk de BSD no tiene gensub(), y mawk rompe el UTF-8.
+#   FMT       gfmt si existe (coreutils de Homebrew). En el fmt de BSD, -c no
+#             es "crown margin" sino centrar: no da error, destroza el formato.
+#   READLINK  greadlink si existe: readlink -f no esta en macOS anterior a 12.3.
+#   MD5       md5sum, gmd5sum o md5 -q, que dan el mismo hash. Con el hash de
+#             la ruta se guarda la posicion de cada libro.
+AWK=$(command -v gawk || echo awk)
+FMT=$(command -v gfmt || echo fmt)
+READLINK=$(command -v greadlink || echo readlink)
+if   command -v md5sum  >/dev/null; then MD5=md5sum
+elif command -v gmd5sum >/dev/null; then MD5=gmd5sum
+else MD5="md5 -q"; fi
 
 # --- Preferencias de lectura (se guardan en ~/.config/pdfterm/config) --------
 ANCHO=64          # ancho de la columna de texto, en caracteres
@@ -152,7 +182,7 @@ case "${1:-}" in
       "Las teclas del lector aparecen en la barra inferior."
     exit 0 ;;
   --uninstall)
-    destino=$(readlink -f "${BASH_SOURCE[0]}")
+    destino=$("$READLINK" -f "${BASH_SOURCE[0]}")
     # Si vino de un paquete, quitarlo a mano dejaria a apt creyendo que sigue
     # instalado: mejor mandar al gestor de paquetes.
     if command -v dpkg >/dev/null && dpkg -S "$destino" 2>/dev/null | grep -q '^pdfterm:'; then
@@ -191,7 +221,7 @@ case "${1:-}" in
     # Se descarga la version de la rama principal y se sustituye este mismo
     # fichero. Se comparan los contenidos, no las versiones: asi se detecta
     # cualquier cambio aunque no se haya publicado una version nueva.
-    destino=$(readlink -f "${BASH_SOURCE[0]}")
+    destino=$("$READLINK" -f "${BASH_SOURCE[0]}")
     tmp=$(mktemp) || exit 1
     trap 'rm -f "$tmp"' EXIT
     echo "Descargando la última versión de $REPO_PDFTERM..."
@@ -225,8 +255,11 @@ F="${1:-}"
 [ -z "$F" ] && { echo "Uso: pdfterm archivo.pdf [página]   ·   pdfterm --config"; exit 1; }
 [ -f "$F" ] || { echo "No existe: $F"; exit 1; }
 command -v pdftotext >/dev/null || { echo "Falta poppler-utils"; exit 1; }
+# Con el fmt o el awk de BSD el programa no da error: compone mal. Mejor avisar.
+"$FMT" --version 2>/dev/null | grep -q GNU || { echo "Falta el fmt de GNU (en macOS: brew install coreutils)"; exit 1; }
+"$AWK" --version 2>/dev/null | grep -q GNU || { echo "Falta gawk (en macOS: brew install gawk)"; exit 1; }
 
-ID=$(readlink -f "$F" | md5sum | cut -d' ' -f1)
+ID=$("$READLINK" -f "$F" | $MD5 | cut -d' ' -f1)
 POSF="$CACHE/$ID.pos"; HDRF="$CACHE/$ID.hdr"; TXTF="$CACHE/$ID.txt"
 IMGF="$CACHE/$ID.img"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
@@ -321,7 +354,7 @@ paleta() {
   C_OFF=$'\033[0m'
 }
 
-TOTAL=$(pdfinfo "$F" 2>/dev/null | awk '/^Pages:/{print $2}')
+TOTAL=$(pdfinfo "$F" 2>/dev/null | "$AWK" '/^Pages:/{print $2}')
 [ -z "$TOTAL" ] && { echo "No se pudo leer el PDF"; exit 1; }
 # La posicion guardada por libro es "pagina renglon guia". Si el fichero es
 # antiguo y solo trae dos campos, la guia toma el valor global.
@@ -353,7 +386,7 @@ extraer_cursivas() {
     | sed 's/<[^>]*>//g; s/&#160;/ /g; s/&#34;/"/g; s/&amp;/\&/g' \
     | sed 's/  */ /g; s/^ //; s/ *$//' \
     | sed 's/^[-–—[:space:]]*//; s/[-–—[:space:]]*$//' \
-    | grep -E '[[:alpha:]]' | awk 'length($0) >= 2'
+    | grep -E '[[:alpha:]]' | "$AWK" 'length($0) >= 2'
 }
 
 if [ ! -f "$HDRF" ]; then
@@ -362,7 +395,7 @@ if [ ! -f "$HDRF" ]; then
     extraer_pagina "$p"
   done | sed -E 's/[0-9]+//g; s/[[:space:]]+/ /g; s/^ //; s/ $//' \
        | grep -v '^ *$' | sort | uniq -c | sort -rn \
-       | awk '$1>=6 { sub(/^[[:space:]]*[0-9]+[[:space:]]/, ""); print }' > "$HDRF"
+       | "$AWK" '$1>=6 { sub(/^[[:space:]]*[0-9]+[[:space:]]/, ""); print }' > "$HDRF"
 fi
 
 # Extraer una pagina cuesta unos 120 ms (pdftotext y pdftohtml, 60 cada uno),
@@ -409,7 +442,7 @@ precargar() {
 }
 
 filtrar() {
-  awk -v h="$HDRF" '
+  "$AWK" -v h="$HDRF" '
     BEGIN { while ((getline l < h) > 0) if (length(l)) hdr[l]=1 }
     { n=$0; gsub(/[0-9]+/,"",n); gsub(/[ \t]+/," ",n); gsub(/^ | $/,"",n)
       if (!(n in hdr)) print }'
@@ -458,7 +491,7 @@ formatear() {
   [ $(( ancho + prefw + 2 )) -gt "$COLS" ] && ancho=$(( COLS - prefw - 2 ))
   [ "$ancho" -lt 20 ] && ancho=20
   marg=$(( ( COLS - ancho - prefw ) / 2 )); [ "$marg" -lt 1 ] && marg=1
-  awk -v curs="$TMP/cursivas" -v sang="$SANGRIA" '
+  "$AWK" -v curs="$TMP/cursivas" -v sang="$SANGRIA" '
     # Los tramos en cursiva llegan en un fichero aparte, ya normalizados. Se
     # buscan en el parrafo una vez unido, porque en el texto original vienen
     # partidos por los saltos de linea del PDF.
@@ -523,7 +556,7 @@ formatear() {
                            { sub(/^[[:space:]]+/,""); sub(/[[:space:]]+$/,"")
                              buf = length(buf) ? buf " " $0 : $0 }
     END { flush() }
-  ' | fmt -c -w "$ancho" | awk -v m="$marg" -v il="$INTER" -v pp="$PARRAFO" -v num="$NUM" \
+  ' | "$FMT" -c -w "$ancho" | "$AWK" -v m="$marg" -v il="$INTER" -v pp="$PARRAFO" -v num="$NUM" \
         -v ct="$C_TXT" -v cl="$C_TIT" -v cn="$C_NUM" -v off="$C_OFF" \
         -v mapa="$TMP/mapa" -v ital="$CURSIVA" -v com="$COMILLAS" '
     # Ademas del texto escribe un mapa: por cada linea de salida, el numero de
@@ -622,7 +655,7 @@ render() {
     printf '%s\n' "$txt" | formatear > "$TMP/pagina"
     cargar_mapa
     RENGLONES=$(sort -n "$TMP/mapa" | tail -1); [ -z "$RENGLONES" ] && RENGLONES=0
-    TOTLIN=$(wc -l < "$TMP/pagina")
+    TOTLIN=$(( $(wc -l < "$TMP/pagina") ))
   fi
   [ "$MARCA" -gt "$RENGLONES" ] && { MARCA=$RENGLONES; [ "$MARCA" -lt 1 ] && MARCA=1; }
   if [ "$GUIA" -eq 1 ]; then seguir_marca; else scroll_vista 0; fi
@@ -746,7 +779,7 @@ mostrar() {
   { printf '\033[?2026h%s\033[H' "$limpiar"
     cabecera "$PAG"
     sed -n "${VISTA},$(( VISTA + ALTO - 1 ))p" "$TMP/pagina" \
-      | awk -v lm="$([ "$GUIA" -eq 1 ] && echo "$LM" || echo 0)" \
+      | "$AWK" -v lm="$([ "$GUIA" -eq 1 ] && echo "$LM" || echo 0)" \
             -v v="$VISTA" -v cm="$C_MRK" -v off="$C_OFF" -v estilo="$GUIA_ESTILO" '
           # Sin numeros la flecha ocupa sitio del margen izquierdo, nunca se
           # antepone: si se añadiera delante empujaria el texto y el renglon
@@ -807,7 +840,7 @@ fila_a_renglon() {
 ilustraciones() {
   if [ ! -s "$IMGF" ]; then
     pdfimages -list "$F" 2>/dev/null \
-      | awk 'NR>2 && $1 ~ /^[0-9]+$/ && $4*$5 >= 250000 { print $1"\t"$4"x"$5 }' \
+      | "$AWK" 'NR>2 && $1 ~ /^[0-9]+$/ && $4*$5 >= 250000 { print $1"\t"$4"x"$5 }' \
       | sort -n -u -k1,1 > "$IMGF"
   fi
   cat "$IMGF"
@@ -815,7 +848,7 @@ ilustraciones() {
 
 buscar() {
   [ -f "$TXTF" ] || pdftotext -layout "$F" "$TXTF" 2>/dev/null
-  awk -v RS='\f' -v q="$1" 'tolower($0) ~ tolower(q) { print NR }' "$TXTF" | head -20
+  "$AWK" -v RS='\f' -v q="$1" 'tolower($0) ~ tolower(q) { print NR }' "$TXTF" | head -20
 }
 
 # ── Entrada por teclas sueltas y raton ──────────────────────────────────────
@@ -846,7 +879,17 @@ trap 'volcar_conf; guardar_pos; rm -rf "$TMP"; restaurar' EXIT
 # MB (boton), MX/MY (columna y fila) y MT (M al pulsar, m al soltar).
 # Con PDFTERM_LOG apuntando a un fichero se anota cada tecla recibida, para
 # poder averiguar que llega cuando pasa algo raro. Sin la variable no hace nada.
-registrar() { [ -n "${PDFTERM_LOG:-}" ] && printf '%s %s\n' "$(date +%H:%M:%S.%N | cut -c1-12)" "$*" >> "$PDFTERM_LOG"; return 0; }
+# La hora sale de bash y no de date: date +%N no existe en el date de BSD, y de
+# paso se ahorran dos procesos por tecla. EPOCHREALTIME (bash 5) da los
+# milisegundos; con bash 4 se anota sin ellos.
+registrar() {
+  [ -n "${PDFTERM_LOG:-}" ] || return 0
+  local t us="${EPOCHREALTIME:-}"
+  printf -v t '%(%H:%M:%S)T' -1
+  [ -n "$us" ] && t+=".${us: -6:3}"
+  printf '%s %s\n' "$t" "$*" >> "$PDFTERM_LOG"
+  return 0
+}
 
 leer_tecla() {
   local c d e sec rc espera="${1:-}"
@@ -981,7 +1024,7 @@ DER
   printf '\033[1m  Atajos de pdfterm\033[0m\n\n'
   ancho_col=$(( COLS / 2 ))
   if [ "$COLS" -ge 76 ]; then
-    awk -v w="$ancho_col" '
+    "$AWK" -v w="$ancho_col" '
       NR == FNR { a[FNR] = $0; na = FNR; next }
       { b[FNR] = $0; nb = FNR }
       END {
@@ -995,7 +1038,7 @@ DER
       }' "$TMP/at1" "$TMP/at2"
   else
     cat "$TMP/at1"; echo; cat "$TMP/at2"
-  fi | sed -E 's/^([^ ].*)$/\x1b[1m\1\x1b[0m/'
+  fi | sed -E $'s/^([^ ].*)$/\033[1m\\1\033[0m/'
   printf '\n\033[2m  Lo que cambies se guarda solo. Pulsa una tecla para volver.\033[0m'
   leer_tecla
 }
@@ -1065,8 +1108,8 @@ procesar_tecla() {
       if [ -z "$res" ]; then
         pedir "Este PDF no tiene ilustraciones. Enter > "
       else
-        printf '\033[1mPáginas con ilustración\033[0m  (%s en total)\n\n' "$(echo "$res" | wc -l)"
-        echo "$res" | awk -v c=4 '
+        printf '\033[1mPáginas con ilustración\033[0m  (%s en total)\n\n' "$(( $(echo "$res" | wc -l) ))"
+        echo "$res" | "$AWK" -v c=4 '
           { printf "  %4s \033[2m%-11s\033[0m", $1, $2
             if (NR % c == 0) printf "\n" }
           END { if (NR % c) printf "\n" }'
